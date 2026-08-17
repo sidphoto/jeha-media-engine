@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA Topic",
+  "type": "object",
+  "required": ["id", "title", "product", "score", "signals"],
+  "properties": {
+    "id": {"type": "string"},
+    "title": {"type": "string"},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "score": {"type": "number", "minimum": 0, "maximum": 100},
+    "signals": {
+      "type": "object",
+      "additionalProperties": {"type": "number", "minimum": 0, "maximum": 100}
+    },
+    "status": {"enum": ["candidate", "shortlisted", "selected", "rejected"]}
+  }
+}
