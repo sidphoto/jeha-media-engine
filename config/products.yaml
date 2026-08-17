@@ -1,0 +1,21 @@
+products:
+  flow_room:
+    name: Flow Room
+    purpose: focus
+    themes: [focus, study, coding, pomodoro, deep_work]
+    default_duration_minutes: 180
+  moon_room:
+    name: Moon Room
+    purpose: sleep
+    themes: [sleep, calm, rain, night, relaxation]
+    default_duration_minutes: 480
+  cozy_room:
+    name: Cozy Room
+    purpose: lifestyle
+    themes: [cafe, reading, jazz, cozy, weekend]
+    default_duration_minutes: 180
+  nature_room:
+    name: Nature Room
+    purpose: ambience
+    themes: [rain, forest, ocean, fireplace, white_noise]
+    default_duration_minutes: 480
