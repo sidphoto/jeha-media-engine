@@ -44,13 +44,49 @@ Research
   -> Research
 ```
 
-## Run locally
+## Run M1 locally
+
+Python 3.11+ is recommended.
 
 ```bash
+python3 -m pip install -r requirements.txt
 python3 scripts/run_daily_pipeline.py
 ```
 
-輸出會寫入 `data/runs/`。
+For a reproducible run with a known output path:
+
+```bash
+python3 scripts/run_daily_pipeline.py --run-id m1-demo
+```
+
+Sample output path:
+
+```text
+data/runs/m1-demo/
+├── candidates.json
+├── top5.json
+├── production_spec.json
+├── qa_report.json
+└── run_summary.json
+```
+
+A successful M1 run ends with:
+
+```json
+{
+  "final_status": "AWAITING_APPROVAL"
+}
+```
+
+Run tests with:
+
+```bash
+pytest -q
+```
+
+## M1 boundaries
+
+M1 is planning/selection only. It does not call external trend APIs, generate music or images, render media with FFmpeg, upload to YouTube, or publish publicly.
 
 ## Project principle
 
