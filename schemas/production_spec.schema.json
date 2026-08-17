@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA Production Spec",
+  "type": "object",
+  "required": ["topic_id", "product", "duration_minutes", "music", "visual", "metadata", "status"],
+  "properties": {
+    "topic_id": {"type": "string"},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "duration_minutes": {"type": "integer", "minimum": 1},
+    "music": {"type": "object"},
+    "visual": {"type": "object"},
+    "metadata": {"type": "object"},
+    "originality_target": {"type": "number", "minimum": 0, "maximum": 100},
+    "status": {"enum": ["draft", "qa", "awaiting_approval", "approved", "rejected"]}
+  }
+}
