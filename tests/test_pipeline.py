@@ -8,8 +8,8 @@ from jsonschema import validate
 from pipeline.planner import build_production_spec
 from pipeline.qa import build_qa_report
 from pipeline.research import generate_candidates
-from pipeline.router import load_products, route_top_candidates
-from pipeline.score import load_scoring_config, rank_candidates
+from pipeline.router import load_products, route_candidate, route_top_candidates
+from pipeline.score import load_scoring_config, rank_candidates, score_candidate
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,6 +37,14 @@ def test_exactly_20_candidates_and_all_scored():
     assert all(len(item["score_breakdown"]) == 8 for item in ranked)
 
 
+def test_inverse_signals_reward_lower_cost_and_competition():
+    scoring = load_scoring_config(ROOT / "config" / "scoring.yaml")
+    base = {name: 50 for name in scoring["weights"]}
+    cheap = {"id": "cheap", "signals": {**base, "production_cost": 10, "competition": 10}}
+    expensive = {"id": "expensive", "signals": {**base, "production_cost": 90, "competition": 90}}
+    assert score_candidate(cheap, scoring["weights"])["score"] > score_candidate(expensive, scoring["weights"])["score"]
+
+
 def test_top5_descending_and_routed():
     _, ranked, top5, *_ = build_outputs()
     assert [item["score"] for item in top5] == sorted(
@@ -44,6 +52,20 @@ def test_top5_descending_and_routed():
     )
     assert [item["id"] for item in top5] == [item["id"] for item in ranked[:5]]
     assert all(item["product"] in {"flow_room", "moon_room", "cozy_room", "nature_room"} for item in top5)
+
+
+def test_rain_routing_uses_primary_intent():
+    products = load_products(ROOT / "config" / "products.yaml")
+    cases = [
+        ({"id": "sleep-rain", "tags": ["sleep", "rain"]}, "moon_room"),
+        ({"id": "forest-rain", "tags": ["forest", "rain"]}, "nature_room"),
+        ({"id": "coding-rain", "tags": ["coding", "rain"]}, "flow_room"),
+        ({"id": "reading-rain", "tags": ["reading", "rain"]}, "cozy_room"),
+    ]
+    for candidate, expected in cases:
+        routed = route_candidate(candidate, products)
+        assert routed["product"] == expected
+        assert routed["route_reason"]["method"] == "intent_priority"
 
 
 def test_production_spec_and_qa_validate():
