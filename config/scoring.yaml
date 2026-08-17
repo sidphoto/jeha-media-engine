@@ -1,0 +1,14 @@
+weights:
+  search_demand: 20
+  recent_growth: 15
+  historical_performance: 20
+  returning_viewer_potential: 15
+  long_session_potential: 10
+  brand_fit: 10
+  production_cost: 5
+  competition: 5
+
+thresholds:
+  shortlist_count: 5
+  originality_minimum: 60
+  publish_score_minimum: 70
