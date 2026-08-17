@@ -49,7 +49,7 @@ Research
 Python 3.11+ is recommended.
 
 ```bash
-python3 -m pip install -r requirements.txt
+python3 -m pip install -e ".[dev]"
 python3 scripts/run_daily_pipeline.py
 ```
 
