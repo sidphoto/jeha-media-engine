@@ -13,6 +13,8 @@ from pathlib import Path
 
 from jsonschema import validate
 
+from pipeline.security import load_json_validated, safe_run_dir
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -133,15 +135,24 @@ def run_release_registry(
     approval_path: str | Path,
     run_id: str,
 ) -> Path:
-    configuration = json.loads(Path(release_configuration_path).read_text(encoding="utf-8"))
-    approval = json.loads(Path(approval_path).read_text(encoding="utf-8"))
+    out = safe_run_dir(ROOT, "release_runs", run_id)
+    configuration = load_json_validated(
+        release_configuration_path,
+        ROOT / "schemas" / "release_configuration.schema.json",
+        label="M5.5 release configuration",
+    )
+    try:
+        approval = json.loads(Path(approval_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"M5.5 release approval could not be loaded as JSON: {exc}") from exc
+    if not isinstance(approval, dict):
+        raise ValueError("M5.5 release approval must be a JSON object")
     approved = attach_release_approval(configuration, approval)
     record = build_release_record(approved)
 
     schema = json.loads((ROOT / "schemas" / "release_record.schema.json").read_text(encoding="utf-8"))
     validate(record, schema)
 
-    out = ROOT / "data" / "release_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "approved_release_configuration.json", approved)
     _write(out / "release_record.json", record)
