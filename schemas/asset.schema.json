@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA Asset Record",
+  "type": "object",
+  "required": ["asset_id", "asset_type", "topic_id", "provider", "model", "created_at", "content_hash", "rights", "technical", "qa_status"],
+  "properties": {
+    "asset_id": {"type": "string", "pattern": "^(MUSIC|VISUAL|SFX)-[A-Z0-9_]+-[0-9]{6}$"},
+    "asset_type": {"enum": ["music", "visual", "sfx"]},
+    "topic_id": {"type": "string", "minLength": 1},
+    "production_spec_ref": {"type": ["string", "null"]},
+    "provider": {"type": "string", "minLength": 1},
+    "model": {"type": "string", "minLength": 1},
+    "provider_version": {"type": ["string", "null"]},
+    "prompt_or_source": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "minLength": 1},
+    "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "rights": {
+      "type": "object",
+      "required": ["commercial_use", "license"],
+      "properties": {
+        "commercial_use": {"type": "boolean"},
+        "license": {"type": "string", "minLength": 1},
+        "source_url": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "technical": {"type": "object"},
+    "qa_status": {"enum": ["pending", "passed", "failed"]}
+  },
+  "additionalProperties": false
+}
