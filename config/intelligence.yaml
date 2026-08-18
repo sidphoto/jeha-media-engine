@@ -1,0 +1,46 @@
+version: m2-v1
+mode: fixture
+region: TW
+language: zh-TW
+raw_topic_minimum: 50
+candidate_count: 20
+
+seeds:
+  - focus music
+  - study music
+  - coding music
+  - rain sounds
+  - sleep music
+  - brown noise
+  - lofi
+  - cafe music
+
+trends_windows:
+  - 7d
+  - 30d
+  - 90d
+
+missing_signal_policy:
+  historical_performance: zero_unavailable
+
+canonical_topics:
+  - {key: rainy_coding, title: "Rainy Coding Music", tags: [coding, focus, rain], product_hint: flow_room}
+  - {key: deep_focus, title: "Deep Focus Music", tags: [focus, deep_work], product_hint: flow_room}
+  - {key: study_lofi, title: "Lofi Study Music", tags: [study, focus], product_hint: flow_room}
+  - {key: pomodoro_rain, title: "Rainy Pomodoro Study", tags: [pomodoro, study, rain], product_hint: flow_room}
+  - {key: coding_night, title: "Late Night Coding", tags: [coding, night, focus], product_hint: flow_room}
+  - {key: sleep_rain, title: "Night Rain for Sleep", tags: [sleep, rain, night], product_hint: moon_room}
+  - {key: brown_noise_sleep, title: "Brown Noise for Sleep", tags: [sleep, white_noise, calm], product_hint: moon_room}
+  - {key: calm_piano_sleep, title: "Calm Piano for Sleep", tags: [sleep, calm, night], product_hint: moon_room}
+  - {key: ocean_sleep, title: "Ocean Waves for Sleep", tags: [sleep, ocean, calm], product_hint: moon_room}
+  - {key: deep_sleep_music, title: "Deep Sleep Music", tags: [sleep, calm], product_hint: moon_room}
+  - {key: cafe_reading, title: "Cozy Cafe Reading", tags: [cafe, reading, cozy], product_hint: cozy_room}
+  - {key: jazz_reading, title: "Soft Jazz Reading", tags: [jazz, reading, cozy], product_hint: cozy_room}
+  - {key: weekend_cafe, title: "Weekend Cafe Music", tags: [cafe, weekend, cozy], product_hint: cozy_room}
+  - {key: rainy_reading, title: "Rainy Window Reading", tags: [reading, rain, cozy], product_hint: cozy_room}
+  - {key: morning_cafe, title: "Morning Cafe Focus", tags: [cafe, focus, cozy], product_hint: cozy_room}
+  - {key: forest_rain, title: "Forest Rain Ambience", tags: [forest, rain], product_hint: nature_room}
+  - {key: ocean_ambience, title: "Ocean Ambience", tags: [ocean], product_hint: nature_room}
+  - {key: fireplace_night, title: "Fireplace Night Ambience", tags: [fireplace, night], product_hint: nature_room}
+  - {key: forest_white_noise, title: "Forest White Noise", tags: [forest, white_noise], product_hint: nature_room}
+  - {key: rain_ambience, title: "Pure Rain Ambience", tags: [rain], product_hint: nature_room}
