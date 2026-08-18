@@ -4,16 +4,25 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from pathlib import Path
+
+from jsonschema import validate
 
 from pipeline.providers import sequence_from_topic_id
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
+def _write(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def asset_bundle_fingerprint(bundle: dict) -> str:
-    """Hash only production-relevant M3 content; status/approval metadata are excluded."""
+    """Hash production-relevant M3 content; status/approval metadata are excluded."""
     subject = {
         "topic_id": bundle.get("topic_id"),
         "mode": bundle.get("mode"),
@@ -24,24 +33,37 @@ def asset_bundle_fingerprint(bundle: dict) -> str:
     return "sha256:" + hashlib.sha256(_canonical(subject)).hexdigest()
 
 
-def approve_asset_bundle(bundle: dict, *, approver: str, approved_at: str) -> dict:
-    """Return an approved copy of an M3 bundle bound to its exact content fingerprint."""
+def attach_approval(bundle: dict, approval: dict) -> dict:
+    """Attach an externally supplied human approval record after validating its binding."""
     if bundle.get("passed") is not True or bundle.get("final_status") != "AWAITING_APPROVAL":
         raise ValueError("Only a passed M3 bundle at AWAITING_APPROVAL may be approved")
-    if not isinstance(approver, str) or not approver.strip():
-        raise ValueError("approver is required")
-    if not isinstance(approved_at, str) or not approved_at.strip():
-        raise ValueError("approved_at is required")
+    if not isinstance(approval, dict) or approval.get("decision") != "approved":
+        raise ValueError("approval decision must be approved")
+    for field in ("approver", "approved_at", "asset_bundle_hash"):
+        value = approval.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"approval {field} is required")
+    expected = asset_bundle_fingerprint(bundle)
+    if approval["asset_bundle_hash"] != expected:
+        raise ValueError("approval asset_bundle_hash does not match the current M3 bundle")
 
     approved = copy.deepcopy(bundle)
-    approved["approval"] = {
-        "decision": "approved",
-        "approver": approver.strip(),
-        "approved_at": approved_at,
-        "asset_bundle_hash": asset_bundle_fingerprint(bundle),
-    }
+    approved["approval"] = copy.deepcopy(approval)
     approved["final_status"] = "APPROVED"
     return approved
+
+
+def approve_asset_bundle(bundle: dict, *, approver: str, approved_at: str) -> dict:
+    """Fixture/test helper. Production runners must consume an external approval record."""
+    return attach_approval(
+        bundle,
+        {
+            "decision": "approved",
+            "approver": approver,
+            "approved_at": approved_at,
+            "asset_bundle_hash": asset_bundle_fingerprint(bundle),
+        },
+    )
 
 
 def _product_namespace(product: str) -> str:
@@ -85,6 +107,10 @@ def build_render_plan(bundle: dict, production_spec: dict) -> dict:
     if any(item.get("qa_status") != "passed" for item in assets):
         raise ValueError("M4 rejects assets that did not pass M3 QA")
 
+    spec_ref = assets[0].get("production_spec_ref")
+    if not spec_ref or any(item.get("production_spec_ref") != spec_ref for item in assets):
+        raise ValueError("M4 requires one consistent Production Spec reference across assets")
+
     duration_minutes = production_spec.get("duration_minutes")
     if isinstance(duration_minutes, bool) or not isinstance(duration_minutes, int) or duration_minutes <= 0:
         raise ValueError("Production Spec duration_minutes must be a positive integer")
@@ -97,7 +123,7 @@ def build_render_plan(bundle: dict, production_spec: dict) -> dict:
         "source_bundle_hash": current_hash,
         "approval": copy.deepcopy(approval),
         "lineage": {
-            "production_spec_ref": assets[0].get("production_spec_ref"),
+            "production_spec_ref": spec_ref,
             "asset_ids": [item["asset_id"] for item in assets],
             "music_id": next(item["asset_id"] for item in assets if item["asset_type"] == "music"),
             "visual_id": next(item["asset_id"] for item in assets if item["asset_type"] == "visual"),
@@ -110,3 +136,37 @@ def build_render_plan(bundle: dict, production_spec: dict) -> dict:
         },
         "final_status": "READY_FOR_RENDER",
     }
+
+
+def run_assembly_pipeline(
+    asset_bundle_path: str | Path,
+    production_spec_path: str | Path,
+    approval_path: str | Path,
+    run_id: str,
+) -> Path:
+    """Consume external approval and persist the deterministic M4.1 render plan."""
+    bundle = json.loads(Path(asset_bundle_path).read_text(encoding="utf-8"))
+    production_spec = json.loads(Path(production_spec_path).read_text(encoding="utf-8"))
+    approval = json.loads(Path(approval_path).read_text(encoding="utf-8"))
+    approved = attach_approval(bundle, approval)
+    plan = build_render_plan(approved, production_spec)
+
+    schema = json.loads((ROOT / "schemas" / "render_plan.schema.json").read_text(encoding="utf-8"))
+    validate(plan, schema)
+
+    out = ROOT / "data" / "render_runs" / run_id
+    out.mkdir(parents=True, exist_ok=False)
+    _write(out / "approved_asset_bundle.json", approved)
+    _write(out / "render_plan.json", plan)
+    _write(
+        out / "run_summary.json",
+        {
+            "run_id": run_id,
+            "pipeline_version": "M4.1",
+            "render_plan_id": plan["render_plan_id"],
+            "video_id": plan["video_id"],
+            "source_bundle_hash": plan["source_bundle_hash"],
+            "final_status": plan["final_status"],
+        },
+    )
+    return out
