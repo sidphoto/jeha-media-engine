@@ -11,9 +11,10 @@
 3. 分流至 Flow Room / Moon Room / Cozy Room / Nature Room
 4. 產生 Production Spec
 5. 執行 QA / Originality Gate
-6. 等待 Human Approval
-7. 後續串接音樂、視覺、FFmpeg 與 YouTube 發布
-8. 將 Analytics 回饋下一輪選題
+6. 產生可追蹤的 Music / Visual / optional SFX asset bundle
+7. 等待 Human Approval
+8. 後續串接 FFmpeg 與 YouTube 發布
+9. 將 Analytics 回饋下一輪選題
 
 ## Products
 
@@ -82,13 +83,48 @@ Live sources are isolated: one source may fail and be reported in `source_errors
 
 Missing JEHA historical performance is represented as numeric `0` only because the M1 scorer requires a number; provenance explicitly marks it `unavailable` / `zero_unavailable`, so the value is never presented as observed history.
 
+## M3 — Asset Generation
+
+M3 consumes a Production Spec and produces deterministic, traceable asset records for music, visuals, and optional environmental SFX.
+
+```text
+Production Spec
+  -> Music / Visual / optional SFX providers
+  -> Asset Registry
+  -> Asset QA
+  -> asset bundle
+  -> AWAITING_APPROVAL
+```
+
+Fixture mode is deterministic and CI-safe:
+
+```bash
+python3 scripts/run_asset_pipeline.py data/runs/m2-demo/production_spec.json --run-id m3-demo --mode fixture
+```
+
+Outputs:
+
+```text
+data/asset_runs/m3-demo/
+├── asset_bundle.json
+├── assets.json
+├── qa_report.json
+└── run_summary.json
+```
+
+Asset records include TOPIC lineage, provider/model/version, prompt/source, SHA-256 content hash, rights/license metadata, technical metadata, and QA status. Fixture asset IDs derive their six-digit sequence from TOPIC lineage so separate topics do not collapse onto the same identity.
+
+Live mode intentionally fails until production providers, credentials, and commercial-use rights policies are explicitly configured. It never silently falls back to fixture generation.
+
+Candidate production integrations are expected to be configured through environment variables or GitHub Secrets; credentials must not be committed to the repository.
+
 ## Tests
 
 ```bash
 pytest -q
 ```
 
-CI verifies both M1 and M2 fixture smoke paths and requires the final status to remain:
+CI verifies M1, M2, and M3 fixture smoke paths and requires successful pipeline stages to remain:
 
 ```json
 {"final_status": "AWAITING_APPROVAL"}
@@ -96,7 +132,7 @@ CI verifies both M1 and M2 fixture smoke paths and requires the final status to 
 
 ## Current boundaries
 
-M1/M2 do not generate music or images, render media with FFmpeg, upload to YouTube, publish publicly, or implement the M6 analytics feedback loop.
+M3 fixture mode produces metadata-only deterministic assets for contract and orchestration testing. Production music/image/SFX generation, FFmpeg rendering, YouTube upload/public publishing, and the M6 analytics feedback loop remain outside the current automated boundary. Live asset providers stay blocked until provider selection, credentials, and commercial-use rights are approved.
 
 ## Project principle
 
