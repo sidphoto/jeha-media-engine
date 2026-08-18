@@ -5,9 +5,9 @@ import pytest
 from pipeline.asset_generation import generate_asset_bundle
 
 
-def sample_spec(tags=None):
+def sample_spec(tags=None, topic_id="TOPIC-FLOW-000024"):
     return {
-        "topic_id": "TOPIC-FLOW-000024",
+        "topic_id": topic_id,
         "product": "flow_room",
         "duration_minutes": 180,
         "music": {"brief": "Original focus rain companion audio"},
@@ -26,6 +26,29 @@ def test_fixture_bundle_is_deterministic_and_traceable():
     assert all(asset["topic_id"] == "TOPIC-FLOW-000024" for asset in first["assets"])
     assert all(asset["production_spec_ref"] == "spec.json" for asset in first["assets"])
     assert all(asset["qa_status"] == "passed" for asset in first["assets"])
+    assert {asset["asset_id"] for asset in first["assets"]} == {
+        "MUSIC-FLOW-000024",
+        "VISUAL-FLOW-000024",
+        "SFX-RAIN-000024",
+    }
+
+
+def test_fixture_ids_do_not_collide_across_topics():
+    first = generate_asset_bundle(sample_spec(topic_id="TOPIC-FLOW-000024"), mode="fixture", production_spec_ref="spec-a.json")
+    second = generate_asset_bundle(sample_spec(topic_id="TOPIC-FLOW-000025"), mode="fixture", production_spec_ref="spec-b.json")
+    assert {asset["asset_id"] for asset in first["assets"]}.isdisjoint(
+        {asset["asset_id"] for asset in second["assets"]}
+    )
+
+
+def test_noncanonical_topic_ids_still_produce_stable_distinct_asset_ids():
+    first = generate_asset_bundle(sample_spec(topic_id="topic-alpha"), mode="fixture", production_spec_ref="spec-a.json")
+    again = generate_asset_bundle(sample_spec(topic_id="topic-alpha"), mode="fixture", production_spec_ref="spec-a.json")
+    second = generate_asset_bundle(sample_spec(topic_id="topic-beta"), mode="fixture", production_spec_ref="spec-b.json")
+    assert {asset["asset_id"] for asset in first["assets"]} == {asset["asset_id"] for asset in again["assets"]}
+    assert {asset["asset_id"] for asset in first["assets"]}.isdisjoint(
+        {asset["asset_id"] for asset in second["assets"]}
+    )
 
 
 def test_sfx_is_optional_when_topic_has_no_environmental_tag():
