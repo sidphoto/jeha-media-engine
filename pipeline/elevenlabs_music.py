@@ -121,7 +121,6 @@ class ElevenLabsMusicProvider:
                 "duration_seconds": music_length_ms / 1000,
                 "format": "mp3" if suffix == ".mp3" else self.output_format,
                 "sample_rate": 48000,
-                "channels": 2,
                 "output_format": self.output_format,
                 "artifact_path": str(artifact_path),
                 "song_id": response_headers.get("song-id") or response_headers.get("Song-Id"),
