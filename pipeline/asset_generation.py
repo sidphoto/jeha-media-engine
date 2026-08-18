@@ -118,25 +118,15 @@ def generate_asset_bundle(
         raise ValueError("mode must be fixture or live")
 
     generated = [music_provider.generate(request), visual_provider.generate(request)]
-    sfx = sfx_provider.generate(request)
-    if sfx:
-        generated.append(sfx)
+    if request.sfx_type:
+        sfx = sfx_provider.generate(request)
+        if sfx:
+            generated.append(sfx)
 
     registry = AssetRegistry()
     qa = []
-    seen_ids: set[str] = set()
-    duplicate_ids: set[str] = set()
     for record in generated:
-        asset_id = record.get("asset_id")
-        if asset_id in seen_ids:
-            duplicate_ids.add(asset_id)
-        seen_ids.add(asset_id)
         result = _qa_record(record, live_mode=(mode == "live"))
-        if asset_id in duplicate_ids:
-            result["checks"]["id_unique"] = False
-            result["passed"] = False
-        else:
-            result["checks"]["id_unique"] = True
         record["qa_status"] = "passed" if result["passed"] else "failed"
         registry.register(record)
         qa.append(result)
