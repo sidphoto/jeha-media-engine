@@ -13,12 +13,14 @@ def main() -> None:
     parser.add_argument("production_spec")
     parser.add_argument("approval")
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--mode", choices=["dry_run", "production"], required=True)
     args = parser.parse_args()
     out = run_assembly_pipeline(
         args.asset_bundle,
         args.production_spec,
         args.approval,
         args.run_id,
+        assembly_mode=args.mode,
     )
     print(out)
 
