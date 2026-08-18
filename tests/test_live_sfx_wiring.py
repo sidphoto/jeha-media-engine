@@ -6,6 +6,7 @@ import pytest
 
 from pipeline.asset_generation import generate_asset_bundle
 from pipeline.assets import build_fixture_asset
+from pipeline.visual_qa import STYLE_PRESET
 
 
 class LiveTestProvider:
@@ -53,7 +54,14 @@ def live_core_providers():
         ),
         "visual": LiveTestProvider(
             "visual",
-            {"width": 1920, "height": 1080, "aspect_ratio": "16:9", "format": "png"},
+            {
+                "width": 1920,
+                "height": 1080,
+                "aspect_ratio": "16:9",
+                "format": "png",
+                "style_preset": STYLE_PRESET,
+                "reference_lineage": [],
+            },
         ),
     }
 
