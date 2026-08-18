@@ -75,10 +75,10 @@ def test_visual_lineage_blocks_missing_rights_style_and_ratio():
     assert "unknown_rights" in issues
 
 
-def test_product_policy_is_explicit_and_ai_first():
+def test_product_policy_is_explicit_and_chatgpt_first():
     policy = visual_policy("nature_room")
     assert policy["style_preset"] == STYLE_PRESET
-    assert policy["source_priority"][0] == "ai_generation"
+    assert policy["source_priority"][0] == "chatgpt_image"
     assert policy["source_priority"][1] == "owned_flickr_reference"
     assert policy["source_priority"][2] == "owned_google_photos_reference"
     assert policy["source_priority"][3] == "free_commercial_stock_reference"
