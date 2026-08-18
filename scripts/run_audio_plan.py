@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from pipeline.audio_plan import run_audio_plan_pipeline
+from pipeline.security import validate_run_id
 
 
 def main() -> None:
@@ -11,7 +12,7 @@ def main() -> None:
     )
     parser.add_argument("render_plan")
     parser.add_argument("approved_asset_bundle")
-    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--run-id", required=True, type=validate_run_id)
     args = parser.parse_args()
     out = run_audio_plan_pipeline(
         args.render_plan,
