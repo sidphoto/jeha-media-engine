@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M4 Delivery Package",
+  "type": "object",
+  "required": [
+    "delivery_package_id",
+    "video_id",
+    "topic_id",
+    "product",
+    "generated_at",
+    "master",
+    "lineage",
+    "master_qa",
+    "delivery_state",
+    "package_hash",
+    "final_status"
+  ],
+  "properties": {
+    "delivery_package_id": {"type": "string", "pattern": "^DELIVERY-[A-Z]+-[0-9]{6}$"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
+    "topic_id": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "generated_at": {"type": "string", "minLength": 1},
+    "master": {
+      "type": "object",
+      "required": ["artifact_path", "content_hash", "technical"],
+      "properties": {
+        "artifact_path": {"type": "string", "minLength": 1},
+        "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "technical": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "lineage": {
+      "type": "object",
+      "required": ["render_plan_id", "audio_plan_id", "visual_plan_id", "source_bundle_hash"],
+      "properties": {
+        "render_plan_id": {"type": "string", "pattern": "^RENDER-"},
+        "audio_plan_id": {"type": "string", "pattern": "^AUDIO-"},
+        "visual_plan_id": {"type": "string", "pattern": "^VISPLAN-"},
+        "source_bundle_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "master_qa": {
+      "type": "object",
+      "required": ["passed"],
+      "properties": {"passed": {"const": true}}
+    },
+    "delivery_state": {"const": "prepared_not_delivered"},
+    "package_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "final_status": {"const": "AWAITING_DELIVERY_APPROVAL"}
+  },
+  "additionalProperties": false
+}
