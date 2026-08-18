@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from pipeline.google_trends import collect_fixture as collect_trends_fixture
 from pipeline.intelligence import collect_evidence, load_intelligence_config, run_intelligence_pipeline
 from pipeline.normalizer import normalize_topics
@@ -28,9 +30,10 @@ def test_m2_normalization_and_signal_contract():
     canonical = normalize_topics(config["canonical_topics"], evidence)
     assert len(canonical) == 20
     assert len({item["key"] for item in canonical}) == 20
-    candidates = build_candidates(canonical, evidence)
+    candidates = build_candidates(canonical, evidence, model_version=config["version"])
     assert len(candidates) == 20
     for candidate in candidates:
+        assert candidate["signal_model_version"] == config["version"]
         assert set(candidate["signals"]) == {
             "search_demand", "recent_growth", "historical_performance",
             "returning_viewer_potential", "long_session_potential", "brand_fit",
@@ -52,18 +55,21 @@ def test_normalizer_deduplicates_variants_to_canonical_identity():
     assert result[0]["evidence_ids"] == ["a", "b"]
 
 
+def test_signal_engineering_refuses_canonical_topic_without_evidence():
+    with pytest.raises(RuntimeError, match="has no market evidence"):
+        build_candidates([{"key": "missing", "title": "Missing", "tags": ["focus"], "product_hint": "flow_room", "evidence_ids": []}], [])
+
+
 def test_full_m2_fixture_pipeline_reuses_m1_and_stops_at_human_gate(tmp_path, monkeypatch):
     import pipeline.intelligence as intelligence
     monkeypatch.setattr(intelligence, "ROOT", tmp_path)
-    # Recreate required config/schema inputs by pointing those reads at repository through wrapped loaders.
     monkeypatch.setattr(intelligence, "load_intelligence_config", lambda path=None: load_intelligence_config(ROOT / "config" / "intelligence.yaml"))
     from pipeline.score import load_scoring_config as real_score
     from pipeline.router import load_products as real_products
     monkeypatch.setattr(intelligence, "load_scoring_config", lambda path: real_score(ROOT / "config" / "scoring.yaml"))
     monkeypatch.setattr(intelligence, "load_products", lambda path: real_products(ROOT / "config" / "products.yaml"))
-    # schema validation paths still use ROOT, so copy minimal files.
     (tmp_path / "schemas").mkdir()
-    for name in ("production_spec.schema.json", "qa_report.schema.json"):
+    for name in ("production_spec.schema.json", "qa_report.schema.json", "market_evidence.schema.json"):
         (tmp_path / "schemas" / name).write_text((ROOT / "schemas" / name).read_text())
     out = run_intelligence_pipeline("m2-test", "fixture")
     import json
@@ -72,6 +78,7 @@ def test_full_m2_fixture_pipeline_reuses_m1_and_stops_at_human_gate(tmp_path, mo
     assert summary["raw_evidence_count"] >= 50
     assert summary["candidate_count"] == 20
     assert summary["shortlist_count"] == 5
+    assert summary["signal_model_version"] == "m2-v1"
     assert summary["final_status"] == "AWAITING_APPROVAL"
     assert len(top5) == 5
     assert all(item["source_trace"]["type"] == "m2_market_evidence" for item in top5)
