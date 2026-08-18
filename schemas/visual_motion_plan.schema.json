@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M4.3 Visual Motion Plan",
+  "type": "object",
+  "required": ["visual_plan_id", "render_plan_id", "video_id", "topic_id", "product", "source_bundle_hash", "source_visual", "execution_profile", "target_duration_seconds", "phases", "planned_coverage_seconds", "output_trim_seconds", "final_status"],
+  "properties": {
+    "visual_plan_id": {"type": "string", "pattern": "^VISPLAN-[A-Z]+-[0-9]{6}$"},
+    "render_plan_id": {"type": "string", "pattern": "^RENDER-[A-Z]+-[0-9]{6}$"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
+    "topic_id": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "source_bundle_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "source_visual": {
+      "type": "object",
+      "required": ["asset_id", "content_hash", "width", "height", "aspect_ratio", "style_preset"],
+      "properties": {
+        "asset_id": {"type": "string", "pattern": "^VISUAL-"},
+        "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "aspect_ratio": {"const": "16:9"},
+        "style_preset": {"const": "jeha_cinematic_dreamy_realism_v1"}
+      },
+      "additionalProperties": false
+    },
+    "execution_profile": {
+      "type": "object",
+      "required": ["width", "height", "fps", "motion_class", "phase_seconds", "crossfade_seconds", "max_scale", "max_pan_x_fraction", "max_pan_y_fraction"],
+      "properties": {
+        "width": {"const": 1920},
+        "height": {"const": 1080},
+        "fps": {"const": 30},
+        "motion_class": {"const": "low_stimulation_ken_burns"},
+        "phase_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "crossfade_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "max_scale": {"type": "number", "minimum": 1.0, "maximum": 1.05},
+        "max_pan_x_fraction": {"type": "number", "minimum": 0, "maximum": 0.03},
+        "max_pan_y_fraction": {"type": "number", "minimum": 0, "maximum": 0.02}
+      },
+      "additionalProperties": false
+    },
+    "target_duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["sequence", "motif", "timeline_start_seconds", "timeline_end_seconds", "crossfade_in_seconds", "transform"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 1},
+          "motif": {"enum": ["push_in", "drift_left", "pull_out", "drift_right"]},
+          "timeline_start_seconds": {"type": "number", "minimum": 0},
+          "timeline_end_seconds": {"type": "number", "exclusiveMinimum": 0},
+          "crossfade_in_seconds": {"type": "number", "minimum": 0},
+          "transform": {
+            "type": "object",
+            "required": ["scale_start", "scale_end", "pan_x_start", "pan_x_end", "pan_y_start", "pan_y_end"],
+            "properties": {
+              "scale_start": {"type": "number", "minimum": 1.0, "maximum": 1.05},
+              "scale_end": {"type": "number", "minimum": 1.0, "maximum": 1.05},
+              "pan_x_start": {"type": "number", "minimum": -0.03, "maximum": 0.03},
+              "pan_x_end": {"type": "number", "minimum": -0.03, "maximum": 0.03},
+              "pan_y_start": {"type": "number", "minimum": -0.02, "maximum": 0.02},
+              "pan_y_end": {"type": "number", "minimum": -0.02, "maximum": 0.02}
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "planned_coverage_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "output_trim_seconds": {"type": "number", "minimum": 0},
+    "final_status": {"const": "VISUAL_PLAN_READY"}
+  },
+  "additionalProperties": false
+}

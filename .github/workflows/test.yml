@@ -167,3 +167,30 @@ jobs:
               assert all(a["section_id"] != b["section_id"] for a, b in zip(segments, segments[1:])), plan
           print("M4.2 long-form audio plan verified")
           PY
+
+      - name: M4.3 visual motion planning smoke test
+        run: >-
+          python scripts/run_visual_motion_plan.py
+          data/render_runs/ci-m4/render_plan.json
+          data/render_runs/ci-m4/approved_asset_bundle.json
+          --run-id ci-m4-visual
+
+      - name: Verify M4.3 low-motion visual coverage and lineage
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("data/visual_runs/ci-m4-visual")
+          plan = json.loads((root / "visual_motion_plan.json").read_text())
+          summary = json.loads((root / "run_summary.json").read_text())
+          assert plan["final_status"] == "VISUAL_PLAN_READY", plan
+          assert summary["pipeline_version"] == "M4.3", summary
+          assert summary["final_status"] == "VISUAL_PLAN_READY", summary
+          assert plan["planned_coverage_seconds"] >= plan["target_duration_seconds"], plan
+          assert plan["source_visual"]["asset_id"].startswith("VISUAL-"), plan
+          assert plan["source_visual"]["style_preset"] == "jeha_cinematic_dreamy_realism_v1", plan
+          assert plan["execution_profile"]["max_scale"] <= 1.05, plan
+          phases = plan["phases"]
+          assert all(a["motif"] != b["motif"] for a, b in zip(phases, phases[1:])), plan
+          print("M4.3 visual motion plan verified")
+          PY
