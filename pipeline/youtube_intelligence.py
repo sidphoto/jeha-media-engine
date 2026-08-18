@@ -50,10 +50,12 @@ def collect_live(queries: list[str], region: str = "TW", max_results: int = 10, 
                 continue
             detail = stats.get(video_id, {})
             snippet = detail.get("snippet", item.get("snippet", {}))
+            raw_views = detail.get("statistics", {}).get("viewCount")
+            views = int(raw_views) if raw_views is not None else None
             out.append({
                 "id": f"yt-live-{video_id}", "source": "youtube", "query": query,
                 "title": snippet.get("title", ""), "channel": snippet.get("channelTitle", ""),
-                "published_at": snippet.get("publishedAt"), "views": int(detail.get("statistics", {}).get("viewCount", 0)),
+                "published_at": snippet.get("publishedAt"), "views": views,
                 "channel_size": None, "age_days": None, "keywords": [], "collected_at": collected_at,
                 "source_trace": {"mode": "live", "video_id": video_id},
             })
