@@ -28,6 +28,8 @@ google-oauth-token.json
 /data/upload_runs/
 /data/release_control_runs/
 /data/release_runs/
+/data/delivery_runs/
+/data/ci_ffmpeg_smoke/
 
 # OS/editor
 .DS_Store

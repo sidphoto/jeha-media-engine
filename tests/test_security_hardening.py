@@ -5,8 +5,17 @@ from pathlib import Path
 
 import pytest
 
+from pipeline.asset_generation import run_asset_pipeline
+from pipeline.assembly import run_assembly_pipeline
+from pipeline.audio_plan import run_audio_plan_pipeline
+from pipeline.ffmpeg_render import run_render_pipeline
 from pipeline.google_trends import collect_live
+from pipeline.publish_contract import run_publish_plan
+from pipeline.release_controls import run_release_configuration
 from pipeline.security import load_json_validated, safe_run_dir, validate_https_host, validate_run_id
+from pipeline.video_registry import run_video_registry
+from pipeline.visual_motion import run_visual_motion_pipeline
+from pipeline.youtube_metadata import run_metadata_pipeline
 from pipeline.youtube_upload import YouTubeResumableTransport
 
 
@@ -74,3 +83,28 @@ def test_schema_boundary_reports_explicit_validation_error(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="schema validation failed"):
         load_json_validated(payload, schema, label="cross-stage fixture")
+
+
+# Every M1-M5 pipeline entrypoint that persists a run under data/<category>/<run_id> must
+# reject a path-traversal run_id before it touches disk, not only when invoked through the
+# argparse CLI wrappers in scripts/. Each callable below is exercised with nonexistent input
+# paths: if run_id validation ran anywhere but first, these would fail with FileNotFoundError
+# instead of the expected ValueError.
+_MALICIOUS_RUN_ID = "../escape"
+_PIPELINE_ENTRYPOINTS = [
+    (run_asset_pipeline, ("missing-production-spec.json",)),
+    (run_assembly_pipeline, ("missing-bundle.json", "missing-spec.json", "missing-approval.json")),
+    (run_audio_plan_pipeline, ("missing-render-plan.json", "missing-bundle.json")),
+    (run_render_pipeline, ("missing-render.json", "missing-audio.json", "missing-visual.json", "missing-bundle.json")),
+    (run_publish_plan, ("missing-package.json", "missing-approval.json")),
+    (run_release_configuration, ("missing-upload-record.json", "missing-metadata.json")),
+    (run_visual_motion_pipeline, ("missing-render-plan.json", "missing-bundle.json")),
+    (run_video_registry, ("missing-master-record.json", "missing-qa-report.json")),
+    (run_metadata_pipeline, ("missing-publish-plan.json", "missing-production-spec.json")),
+]
+
+
+@pytest.mark.parametrize("func, positional_args", _PIPELINE_ENTRYPOINTS)
+def test_pipeline_entrypoints_reject_path_traversal_run_id_before_touching_disk(func, positional_args):
+    with pytest.raises(ValueError, match="run_id"):
+        func(*positional_args, _MALICIOUS_RUN_ID)
