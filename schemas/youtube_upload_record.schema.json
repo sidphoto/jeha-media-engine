@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M5 Private YouTube Upload Record",
+  "type": "object",
+  "required": ["upload_record_id", "publish_plan_id", "metadata_package_id", "delivery_package_id", "source_video_id", "source_package_hash", "source_master_hash", "platform", "remote_video_id", "visibility", "uploaded_at", "mode", "credential_trace", "final_status"],
+  "properties": {
+    "upload_record_id": {"type": "string", "pattern": "^UPLOAD-[A-Z]+-[0-9]{6}$"},
+    "publish_plan_id": {"type": "string", "pattern": "^PUBLISH-"},
+    "metadata_package_id": {"type": "string", "pattern": "^META-"},
+    "delivery_package_id": {"type": "string", "pattern": "^DELIVERY-"},
+    "source_video_id": {"type": "string", "pattern": "^VIDEO-"},
+    "source_package_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "source_master_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "platform": {"const": "youtube"},
+    "remote_video_id": {"type": "string", "minLength": 1},
+    "visibility": {"const": "private"},
+    "uploaded_at": {"type": "string", "minLength": 1},
+    "mode": {"enum": ["fixture", "live"]},
+    "credential_trace": {"enum": ["fixture", "oauth_access_token_from_runtime_secret"]},
+    "final_status": {"const": "PRIVATE_UPLOAD_COMPLETE"}
+  },
+  "additionalProperties": false
+}
