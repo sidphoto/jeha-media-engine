@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from pipeline.assets import AssetRegistry
@@ -13,6 +14,7 @@ from pipeline.providers import (
     FixtureVisualProvider,
     UnconfiguredLiveProvider,
 )
+from pipeline.sfx_library import LocalSFXLibraryProvider
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,6 +101,18 @@ def _qa_record(record: dict, *, live_mode: bool) -> dict:
     return {"asset_id": record["asset_id"], "passed": passed, "checks": checks}
 
 
+def _default_live_sfx_provider(request: AssetRequest):
+    if not request.sfx_type:
+        return UnconfiguredLiveProvider("sfx")
+    manifest = os.getenv("JEHA_SFX_MANIFEST")
+    if not manifest:
+        raise RuntimeError(
+            "JEHA_SFX_MANIFEST is required when live Production Spec requests SFX. "
+            "Point it to a license-reviewed local SFX manifest."
+        )
+    return LocalSFXLibraryProvider(manifest_path=manifest)
+
+
 def generate_asset_bundle(
     spec: dict,
     *,
@@ -117,7 +131,7 @@ def generate_asset_bundle(
         selected = providers or {}
         music_provider = selected.get("music", ElevenLabsMusicProvider())
         visual_provider = selected.get("visual", UnconfiguredLiveProvider("visual"))
-        sfx_provider = selected.get("sfx", UnconfiguredLiveProvider("sfx"))
+        sfx_provider = selected.get("sfx") or _default_live_sfx_provider(request)
     else:
         raise ValueError("mode must be fixture or live")
 
