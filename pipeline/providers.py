@@ -5,6 +5,8 @@ providers, commercial-use policies, and credentials are selected independently.
 """
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import dataclass
 
 from pipeline.assets import build_fixture_asset
@@ -21,12 +23,28 @@ class AssetRequest:
     sfx_type: str | None = None
 
 
+def _sequence_from_topic_id(topic_id: str) -> int:
+    """Derive a stable non-zero six-digit asset sequence from TOPIC lineage.
+
+    Canonical JEHA topic IDs end in a numeric sequence, which is preserved directly.
+    Non-canonical IDs use a deterministic hash fallback so fixture runs remain stable
+    without collapsing every topic onto sequence 000001.
+    """
+    match = re.search(r"(\d+)$", topic_id)
+    if match:
+        value = int(match.group(1))
+        if 1 <= value <= 999999:
+            return value
+    digest = hashlib.sha256(topic_id.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") % 999999 + 1
+
+
 class FixtureMusicProvider:
     def generate(self, request: AssetRequest) -> dict:
         return build_fixture_asset(
             asset_type="music",
             namespace=request.product.replace("_room", ""),
-            sequence=1,
+            sequence=_sequence_from_topic_id(request.topic_id),
             topic_id=request.topic_id,
             production_spec_ref=request.production_spec_ref,
             prompt_or_source=request.music_brief,
@@ -39,7 +57,7 @@ class FixtureVisualProvider:
         return build_fixture_asset(
             asset_type="visual",
             namespace=request.product.replace("_room", ""),
-            sequence=1,
+            sequence=_sequence_from_topic_id(request.topic_id),
             topic_id=request.topic_id,
             production_spec_ref=request.production_spec_ref,
             prompt_or_source=request.visual_brief,
@@ -54,7 +72,7 @@ class FixtureSFXProvider:
         return build_fixture_asset(
             asset_type="sfx",
             namespace=request.sfx_type,
-            sequence=1,
+            sequence=_sequence_from_topic_id(request.topic_id),
             topic_id=request.topic_id,
             production_spec_ref=request.production_spec_ref,
             prompt_or_source=f"JEHA licensed {request.sfx_type} fixture",
