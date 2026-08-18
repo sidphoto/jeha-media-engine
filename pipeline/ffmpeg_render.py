@@ -131,32 +131,39 @@ def build_audio_ffmpeg_command(audio_plan: dict, artifact_paths: dict[str, Path]
     """Compile M4.2 segment schedules into one FFmpeg audio render command."""
     music = audio_plan["music"]
     tracks = [music] + list(audio_plan.get("sfx_tracks", []))
-    input_ids = [track["source_asset_id"] for track in tracks]
     command = ["ffmpeg", "-y"]
-    for asset_id in input_ids:
-        command += ["-i", str(artifact_paths[asset_id])]
+    for track in tracks:
+        command += ["-i", str(artifact_paths[track["source_asset_id"]])]
 
     filter_parts: list[str] = []
     rendered_labels: list[str] = []
     for input_index, track in enumerate(tracks):
-        segments = track["segments"]
-        split_labels = "".join(f"[a{input_index}s{i}]" for i in range(len(segments)))
-        filter_parts.append(f"[{input_index}:a]asplit={len(segments)}{split_labels}")
+        segments = track.get("segments", [])
+        if not segments:
+            raise ValueError("M4.4 audio track requires at least one segment")
+        if len(segments) == 1:
+            source_labels = [f"{input_index}:a"]
+        else:
+            source_labels = [f"a{input_index}s{i}" for i in range(len(segments))]
+            split_labels = "".join(f"[{label}]" for label in source_labels)
+            filter_parts.append(f"[{input_index}:a]asplit={len(segments)}{split_labels}")
+
         segment_labels: list[str] = []
         for i, segment in enumerate(segments):
             label = f"a{input_index}p{i}"
             start = _fmt(float(segment["source_start_seconds"]))
             end = _fmt(float(segment["source_end_seconds"]))
             filter_parts.append(
-                f"[a{input_index}s{i}]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[{label}]"
+                f"[{source_labels[i]}]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[{label}]"
             )
             segment_labels.append(label)
 
         current = segment_labels[0]
         for i in range(1, len(segment_labels)):
             out = f"a{input_index}x{i}"
-            crossfade = _fmt(float(segments[i]["crossfade_in_seconds"]))
-            if float(crossfade) > 0:
+            crossfade_value = float(segments[i]["crossfade_in_seconds"])
+            crossfade = _fmt(crossfade_value)
+            if crossfade_value > 0:
                 filter_parts.append(
                     f"[{current}][{segment_labels[i]}]acrossfade=d={crossfade}:c1=tri:c2=tri[{out}]"
                 )
@@ -215,16 +222,25 @@ def build_visual_ffmpeg_command(visual_plan: dict, artifact_paths: dict[str, Pat
     height = int(profile["height"])
     max_pan_x = float(profile["max_pan_x_fraction"])
     max_pan_y = float(profile["max_pan_y_fraction"])
-    phases = visual_plan["phases"]
+    phases = visual_plan.get("phases", [])
+    if not phases:
+        raise ValueError("M4.4 visual plan requires at least one phase")
 
     command = ["ffmpeg", "-y", "-loop", "1", "-i", str(artifact_paths[source_id])]
-    split_labels = "".join(f"[vsrc{i}]" for i in range(len(phases)))
-    filters = [f"[0:v]split={len(phases)}{split_labels}"]
+    filters: list[str] = []
+    if len(phases) == 1:
+        source_labels = ["0:v"]
+    else:
+        source_labels = [f"vsrc{i}" for i in range(len(phases))]
+        split_labels = "".join(f"[{label}]" for label in source_labels)
+        filters.append(f"[0:v]split={len(phases)}{split_labels}")
+
     phase_labels: list[str] = []
     for i, phase in enumerate(phases):
         transform = phase["transform"]
         duration = float(phase["timeline_end_seconds"]) - float(phase["timeline_start_seconds"])
-        # timeline duration includes crossfade overlap; each source phase is the configured phase duration.
+        if duration <= 0:
+            raise ValueError("M4.4 visual phase duration must be positive")
         frames = max(1, round(duration * fps))
         z = _motion_expr(float(transform["scale_start"]), float(transform["scale_end"]), frames)
         nx0 = float(transform["pan_x_start"]) / max_pan_x if max_pan_x else 0.0
@@ -237,7 +253,7 @@ def build_visual_ffmpeg_command(visual_plan: dict, artifact_paths: dict[str, Pat
         y = f"(ih-ih/zoom)/2*(1+({ny}))"
         label = f"vp{i}"
         filters.append(
-            f"[vsrc{i}]scale={width}:{height},"
+            f"[{source_labels[i]}]scale={width}:{height},"
             f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={width}x{height}:fps={fps},"
             f"setsar=1[{label}]"
         )
