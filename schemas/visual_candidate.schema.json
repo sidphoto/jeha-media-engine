@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M3 Visual Candidate Handoff",
+  "type": "object",
+  "required": [
+    "topic_id",
+    "production_spec_ref",
+    "product",
+    "candidate_role",
+    "provider",
+    "execution_mode",
+    "parent_style",
+    "style_preset",
+    "reference_role",
+    "aspect_ratio",
+    "prompt",
+    "prompt_hash",
+    "remote_execution_allowed",
+    "final_status"
+  ],
+  "properties": {
+    "topic_id": {"type": "string", "pattern": "^TOPIC-"},
+    "production_spec_ref": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "candidate_role": {"enum": ["primary", "alt_a", "alt_b"]},
+    "provider": {"const": "chatgpt_image"},
+    "execution_mode": {"const": "browser_handoff"},
+    "parent_style": {"const": "jeha_cinematic_dreamy_realism_v2"},
+    "style_preset": {
+      "enum": [
+        "jeha_flow_focus_v2",
+        "jeha_moon_sleep_v2",
+        "jeha_cozy_warm_v2",
+        "jeha_nature_atmospheric_v2"
+      ]
+    },
+    "reference_role": {"type": "string", "minLength": 1},
+    "aspect_ratio": {"const": "16:9"},
+    "prompt": {"type": "string", "minLength": 100},
+    "prompt_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "remote_execution_allowed": {"const": false},
+    "artifact_path": {"type": "string", "minLength": 1},
+    "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "final_status": {
+      "enum": ["AWAITING_CHATGPT_IMAGE_GENERATION", "VISUAL_CANDIDATE_READY_FOR_QA"]
+    }
+  },
+  "additionalProperties": false
+}
