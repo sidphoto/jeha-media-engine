@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M4 Render Plan",
+  "type": "object",
+  "required": [
+    "render_plan_id",
+    "video_id",
+    "topic_id",
+    "product",
+    "source_bundle_hash",
+    "approval",
+    "lineage",
+    "target",
+    "final_status"
+  ],
+  "properties": {
+    "render_plan_id": {"type": "string", "pattern": "^RENDER-[A-Z]+-[0-9]{6}$"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
+    "topic_id": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "source_bundle_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "approval": {
+      "type": "object",
+      "required": ["decision", "approver", "approved_at", "asset_bundle_hash"],
+      "properties": {
+        "decision": {"const": "approved"},
+        "approver": {"type": "string", "minLength": 1},
+        "approved_at": {"type": "string", "minLength": 1},
+        "asset_bundle_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "lineage": {
+      "type": "object",
+      "required": ["production_spec_ref", "asset_ids", "music_id", "visual_id", "sfx_ids"],
+      "properties": {
+        "production_spec_ref": {"type": "string", "minLength": 1},
+        "asset_ids": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "music_id": {"type": "string", "pattern": "^MUSIC-"},
+        "visual_id": {"type": "string", "pattern": "^VISUAL-"},
+        "sfx_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^SFX-"}}
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["duration_minutes", "aspect_ratio", "status"],
+      "properties": {
+        "duration_minutes": {"type": "integer", "minimum": 1},
+        "aspect_ratio": {"const": "16:9"},
+        "status": {"const": "READY_FOR_RENDER"}
+      },
+      "additionalProperties": false
+    },
+    "final_status": {"const": "READY_FOR_RENDER"}
+  },
+  "additionalProperties": false
+}
