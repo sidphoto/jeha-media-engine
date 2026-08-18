@@ -18,11 +18,17 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Install FFmpeg tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Install package
         run: python -m pip install -e ".[dev]"
 
       - name: Verify FFmpeg tools
         run: |
+          set -o pipefail
           ffmpeg -version | head -n 1
           ffprobe -version | head -n 1
 
