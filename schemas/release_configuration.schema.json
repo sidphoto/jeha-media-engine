@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M5 Release Configuration",
+  "type": "object",
+  "required": ["control_id", "upload_record_id", "remote_video_id", "publish_plan_id", "metadata_package_id", "delivery_package_id", "video_id", "topic_id", "product", "source_package_hash", "source_master_hash", "current_remote_visibility", "target_visibility", "schedule", "thumbnail", "release_gate", "final_status", "configuration_hash"],
+  "properties": {
+    "control_id": {"type": "string", "pattern": "^CONTROL-[A-Z]+-[0-9]{6}$"},
+    "upload_record_id": {"type": "string", "pattern": "^UPLOAD-"},
+    "remote_video_id": {"type": "string", "minLength": 1},
+    "publish_plan_id": {"type": "string", "pattern": "^PUBLISH-"},
+    "metadata_package_id": {"type": "string", "pattern": "^META-"},
+    "delivery_package_id": {"type": "string", "pattern": "^DELIVERY-"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-"},
+    "topic_id": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "source_package_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "source_master_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "current_remote_visibility": {"const": "private"},
+    "target_visibility": {"enum": ["private", "unlisted", "public"]},
+    "schedule": {
+      "type": "object",
+      "required": ["enabled", "publish_at", "required_pre_schedule_privacy", "remote_write_allowed"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "publish_at": {"type": ["string", "null"]},
+        "required_pre_schedule_privacy": {"const": "private"},
+        "remote_write_allowed": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "thumbnail": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["path", "mime_type", "size_bytes", "content_hash", "remote_write_allowed"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "mime_type": {"enum": ["image/jpeg", "image/png"]},
+            "size_bytes": {"type": "integer", "minimum": 1, "maximum": 2097152},
+            "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "remote_write_allowed": {"const": false}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "release_gate": {
+      "type": "object",
+      "required": ["public_release_allowed", "remote_mutation_allowed", "requires_m5_5_release_approval"],
+      "properties": {
+        "public_release_allowed": {"const": false},
+        "remote_mutation_allowed": {"const": false},
+        "requires_m5_5_release_approval": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "final_status": {"const": "RELEASE_CONFIGURATION_READY"},
+    "configuration_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}
