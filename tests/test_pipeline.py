@@ -74,6 +74,20 @@ def test_production_spec_and_qa_validate():
     validate(qa, load_json(ROOT / "schemas" / "qa_report.schema.json"))
     assert qa["passed"] is True
     assert spec["status"] == "awaiting_approval"
+    assert spec["metadata"]["brand_fit"] > 0
+
+
+def test_brand_fit_zero_fails_qa_and_normal_signal_passes():
+    *_, spec, qa = build_outputs()
+    normal_check = next(check for check in qa["checks"] if check["id"] == "brand_fit")
+    assert normal_check["passed"] is True
+    assert normal_check["evidence"]["brand_fit"] == spec["metadata"]["brand_fit"]
+
+    invalid_spec = {**spec, "metadata": {**spec["metadata"], "brand_fit": 0}}
+    invalid_qa = build_qa_report(invalid_spec, originality_minimum=60)
+    invalid_check = next(check for check in invalid_qa["checks"] if check["id"] == "brand_fit")
+    assert invalid_check["passed"] is False
+    assert invalid_qa["passed"] is False
 
 
 def test_same_seed_is_reproducible():

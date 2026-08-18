@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import math
+
 
 def build_qa_report(production_spec: dict, originality_minimum: float) -> dict:
     metadata = production_spec.get("metadata", {})
+    brand_fit = metadata.get("brand_fit")
+    brand_fit_passed = (
+        isinstance(brand_fit, (int, float))
+        and not isinstance(brand_fit, bool)
+        and math.isfinite(brand_fit)
+        and 0 < brand_fit <= 100
+    )
     checks = [
         {
             "id": "originality",
@@ -24,10 +33,10 @@ def build_qa_report(production_spec: dict, originality_minimum: float) -> dict:
         {
             "id": "brand_fit",
             "label": "Candidate has a positive JEHA brand-fit signal",
-            "passed": bool(metadata.get("product_name")) and metadata.get("candidate_score", 0) > 0,
+            "passed": brand_fit_passed,
             "evidence": {
-                "product_name": metadata.get("product_name"),
-                "candidate_score": metadata.get("candidate_score"),
+                "brand_fit": brand_fit,
+                "valid_range": "(0, 100]",
             },
         },
         {

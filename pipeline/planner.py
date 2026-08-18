@@ -30,6 +30,7 @@ def build_production_spec(topic: dict, products: dict[str, dict]) -> dict:
             "tags": topic.get("tags", []),
             "source_trace": topic.get("source_trace", {}),
             "candidate_score": topic["score"],
+            "brand_fit": topic["signals"]["brand_fit"],
         },
         "originality_target": 85,
         "status": "awaiting_approval",
