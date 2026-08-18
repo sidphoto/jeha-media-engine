@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 
 from pipeline.assets import build_fixture_asset
+from pipeline.visual_qa import STYLE_PRESET
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,15 @@ class FixtureVisualProvider:
             topic_id=request.topic_id,
             production_spec_ref=request.production_spec_ref,
             prompt_or_source=request.visual_brief,
-            technical={"width": 1920, "height": 1080, "aspect_ratio": "16:9", "format": "png"},
+            technical={
+                "width": 1920,
+                "height": 1080,
+                "aspect_ratio": "16:9",
+                "format": "png",
+                "style_preset": STYLE_PRESET,
+                "reference_lineage": [],
+                "source_policy": "ai_generation",
+            },
         )
 
 
