@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 from urllib.request import Request, urlopen
@@ -109,7 +110,7 @@ class ElevenLabsMusicProvider:
             "model": self.model_id,
             "provider_version": "Eleven Music API",
             "prompt_or_source": prompt,
-            "created_at": "2026-08-18T00:00:00+00:00",
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "content_hash": "sha256:" + hashlib.sha256(audio).hexdigest(),
             "rights": {
                 "commercial_use": True,
