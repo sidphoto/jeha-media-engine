@@ -61,7 +61,9 @@ def test_signal_engineering_refuses_canonical_topic_without_evidence():
 
 
 def test_full_m2_fixture_pipeline_reuses_m1_and_stops_at_human_gate(tmp_path, monkeypatch):
+    import json
     import pipeline.intelligence as intelligence
+
     monkeypatch.setattr(intelligence, "ROOT", tmp_path)
     monkeypatch.setattr(intelligence, "load_intelligence_config", lambda path=None: load_intelligence_config(ROOT / "config" / "intelligence.yaml"))
     from pipeline.score import load_scoring_config as real_score
@@ -71,14 +73,26 @@ def test_full_m2_fixture_pipeline_reuses_m1_and_stops_at_human_gate(tmp_path, mo
     (tmp_path / "schemas").mkdir()
     for name in ("production_spec.schema.json", "qa_report.schema.json", "market_evidence.schema.json"):
         (tmp_path / "schemas" / name).write_text((ROOT / "schemas" / name).read_text())
+
     out = run_intelligence_pipeline("m2-test", "fixture")
-    import json
     summary = json.loads((out / "run_summary.json").read_text())
     top5 = json.loads((out / "top5.json").read_text())
+    production_spec = json.loads((out / "production_spec.json").read_text())
+    benchmark = json.loads((out / "youtube_benchmark.json").read_text())
+    patterns = json.loads((out / "benchmark_patterns.json").read_text())
+
     assert summary["raw_evidence_count"] >= 50
     assert summary["candidate_count"] == 20
     assert summary["shortlist_count"] == 5
     assert summary["signal_model_version"] == "m2-v1"
+    assert summary["benchmark_sample_count"] == 12
+    assert summary["benchmark_products"] == 4
     assert summary["final_status"] == "AWAITING_APPROVAL"
     assert len(top5) == 5
     assert all(item["source_trace"]["type"] == "m2_market_evidence" for item in top5)
+    assert len(benchmark) == 12
+    assert set(patterns) == {"flow_room", "moon_room", "cozy_room", "nature_room"}
+    advisory = production_spec["metadata"]["youtube_benchmark"]
+    assert advisory["advisory_only"] is True
+    assert advisory["product"] == production_spec["product"]
+    assert "do not copy" in advisory["guardrail"].lower()
