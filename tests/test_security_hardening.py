@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import http.server
 import json
+import threading
 from pathlib import Path
+from urllib.request import Request
 
 import pytest
 
@@ -10,6 +13,7 @@ from pipeline.assembly import run_assembly_pipeline
 from pipeline.audio_plan import run_audio_plan_pipeline
 from pipeline.ffmpeg_render import run_render_pipeline
 from pipeline.google_trends import collect_live
+from pipeline.http_utils import request_json
 from pipeline.publish_contract import run_publish_plan
 from pipeline.release_controls import run_release_configuration
 from pipeline.security import load_json_validated, safe_run_dir, validate_https_host, validate_run_id
@@ -108,3 +112,64 @@ _PIPELINE_ENTRYPOINTS = [
 def test_pipeline_entrypoints_reject_path_traversal_run_id_before_touching_disk(func, positional_args):
     with pytest.raises(ValueError, match="run_id"):
         func(*positional_args, _MALICIOUS_RUN_ID)
+
+
+class _CaptureHandler(http.server.BaseHTTPRequestHandler):
+    """Records the last request it received; used as the redirect target below."""
+
+    captured: dict = {}
+
+    def do_GET(self):  # noqa: N802 - stdlib handler naming
+        _CaptureHandler.captured["authorization"] = self.headers.get("Authorization")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"received": True}).encode())
+
+    def log_message(self, *args):  # silence default stderr logging
+        pass
+
+
+def _make_redirect_handler(target_port: int):
+    class _RedirectHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{target_port}/steal")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    return _RedirectHandler
+
+
+@pytest.fixture
+def local_redirect_chain():
+    """Spins up an attacker capture server plus a server that 302-redirects to it."""
+    _CaptureHandler.captured = {}
+    attacker = http.server.HTTPServer(("127.0.0.1", 0), _CaptureHandler)
+    threading.Thread(target=attacker.serve_forever, daemon=True).start()
+
+    redirector = http.server.HTTPServer(("127.0.0.1", 0), _make_redirect_handler(attacker.server_address[1]))
+    threading.Thread(target=redirector.serve_forever, daemon=True).start()
+
+    try:
+        yield redirector.server_address[1], _CaptureHandler.captured
+    finally:
+        attacker.shutdown()
+        redirector.shutdown()
+
+
+def test_request_json_refuses_redirect_instead_of_forwarding_credentials(local_redirect_chain):
+    """Regression test for the urllib default behavior of resending Authorization headers
+    across a cross-host redirect. A validated, allowlisted endpoint (e.g. GOOGLE_TRENDS_API_URL)
+    could still exfiltrate a Bearer token via a 3xx response naming an arbitrary host; this
+    must fail closed instead of silently following it."""
+    redirector_port, captured = local_redirect_chain
+    req = Request(
+        f"http://127.0.0.1:{redirector_port}/start",
+        headers={"Authorization": "Bearer do-not-exfiltrate"},
+    )
+    with pytest.raises(RuntimeError, match="redirect"):
+        request_json(req, retries=0)
+    assert captured.get("authorization") is None
