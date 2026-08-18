@@ -4,6 +4,7 @@ import pytest
 
 from pipeline.asset_generation import generate_asset_bundle
 from pipeline.assets import build_fixture_asset
+from pipeline.visual_qa import STYLE_PRESET
 
 
 def sample_spec(tags=None, topic_id="TOPIC-FLOW-000024"):
@@ -15,6 +16,19 @@ def sample_spec(tags=None, topic_id="TOPIC-FLOW-000024"):
         "visual": {"brief": "Original rainy coding room"},
         "metadata": {"tags": tags or ["focus", "coding", "rain"]},
     }
+
+
+def visual_technical(**overrides):
+    value = {
+        "width": 1920,
+        "height": 1080,
+        "aspect_ratio": "16:9",
+        "format": "png",
+        "style_preset": STYLE_PRESET,
+        "reference_lineage": [],
+    }
+    value.update(overrides)
+    return value
 
 
 class LiveTestProvider:
@@ -84,11 +98,21 @@ def test_sfx_is_optional_when_topic_has_no_environmental_tag():
     assert bundle["final_status"] == "AWAITING_APPROVAL"
 
 
-def test_live_mode_uses_elevenlabs_and_fails_explicitly_without_key(monkeypatch):
-    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
-    monkeypatch.delenv("ELEVENLABS_COMMERCIAL_USE_ACK", raising=False)
-    with pytest.raises(RuntimeError, match="ELEVENLABS_API_KEY"):
+def test_live_mode_preflight_reports_missing_provider_configuration(monkeypatch):
+    for name in (
+        "ELEVENLABS_API_KEY",
+        "ELEVENLABS_COMMERCIAL_USE_ACK",
+        "GEMINI_API_KEY",
+        "GEMINI_COMMERCIAL_USE_ACK",
+        "JEHA_SFX_MANIFEST",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(RuntimeError) as exc:
         generate_asset_bundle(sample_spec(), mode="live", production_spec_ref="spec.json")
+    message = str(exc.value)
+    assert "ELEVENLABS_API_KEY" in message
+    assert "GEMINI_API_KEY" in message
+    assert "JEHA_SFX_MANIFEST" in message
 
 
 def test_live_provider_contract_can_be_injected_without_orchestration_changes():
@@ -101,10 +125,7 @@ def test_live_provider_contract_can_be_injected_without_orchestration_changes():
                 "music",
                 {"duration_seconds": 10800, "format": "wav", "sample_rate": 48000, "channels": 2},
             ),
-            "visual": LiveTestProvider(
-                "visual",
-                {"width": 1920, "height": 1080, "aspect_ratio": "16:9", "format": "png"},
-            ),
+            "visual": LiveTestProvider("visual", visual_technical()),
         },
     )
     assert bundle["passed"] is True
@@ -122,6 +143,25 @@ def test_invalid_technical_metadata_fails_asset_qa():
                 "music",
                 {"duration_seconds": 10800, "format": "wav", "sample_rate": 0, "channels": 2},
             ),
+            "visual": LiveTestProvider("visual", visual_technical()),
+        },
+    )
+    assert bundle["passed"] is False
+    assert bundle["final_status"] == "FAILED"
+    music_qa = next(item for item in bundle["qa"] if item["asset_id"].startswith("MUSIC-"))
+    assert music_qa["checks"]["technical_metadata"] is False
+
+
+def test_visual_without_house_style_lineage_fails_asset_qa():
+    bundle = generate_asset_bundle(
+        sample_spec(["focus", "coding"]),
+        mode="live",
+        production_spec_ref="spec.json",
+        providers={
+            "music": LiveTestProvider(
+                "music",
+                {"duration_seconds": 10800, "format": "wav", "sample_rate": 48000, "channels": 2},
+            ),
             "visual": LiveTestProvider(
                 "visual",
                 {"width": 1920, "height": 1080, "aspect_ratio": "16:9", "format": "png"},
@@ -129,6 +169,6 @@ def test_invalid_technical_metadata_fails_asset_qa():
         },
     )
     assert bundle["passed"] is False
-    assert bundle["final_status"] == "FAILED"
-    music_qa = next(item for item in bundle["qa"] if item["asset_id"].startswith("MUSIC-"))
-    assert music_qa["checks"]["technical_metadata"] is False
+    visual_qa = next(item for item in bundle["qa"] if item["asset_id"].startswith("VISUAL-"))
+    assert visual_qa["checks"]["visual_house_style_lineage"] is False
+    assert "wrong_or_missing_style_preset" in visual_qa["visual_lineage_issues"]
