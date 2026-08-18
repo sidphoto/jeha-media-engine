@@ -5,8 +5,8 @@
   "required": ["observation_id", "video_id", "topic_id", "product", "window_start", "window_end", "source", "metrics", "derived_scores", "final_status"],
   "properties": {
     "observation_id": {"type": "string", "pattern": "^ANALYTICS-[A-Z]+-[0-9]{6}$"},
-    "video_id": {"type": "string", "pattern": "^VIDEO-"},
-    "topic_id": {"type": "string", "pattern": "^TOPIC-"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
+    "topic_id": {"type": "string", "pattern": "^TOPIC-[A-Z]+-[0-9]{6}$"},
     "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
     "window_start": {"type": "string", "minLength": 1},
     "window_end": {"type": "string", "minLength": 1},
