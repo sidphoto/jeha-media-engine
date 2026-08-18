@@ -54,3 +54,28 @@ jobs:
           assert len(top5) == 5
           print("M2 fixture pipeline verified")
           PY
+
+      - name: M3 asset fixture smoke test
+        run: python scripts/run_asset_pipeline.py data/runs/ci-m2/production_spec.json --run-id ci-m3 --mode fixture
+
+      - name: Verify M3 asset lineage and approval gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("data/asset_runs/ci-m3")
+          summary = json.loads((root / "run_summary.json").read_text())
+          assets = json.loads((root / "assets.json").read_text())
+          qa = json.loads((root / "qa_report.json").read_text())
+          assert summary["pipeline_version"] == "M3", summary
+          assert summary["mode"] == "fixture", summary
+          assert summary["asset_count"] >= 2, summary
+          assert summary["qa_passed"] is True, summary
+          assert summary["final_status"] == "AWAITING_APPROVAL", summary
+          assert qa["passed"] is True, qa
+          assert {asset["asset_type"] for asset in assets}.issuperset({"music", "visual"})
+          assert len({asset["asset_id"] for asset in assets}) == len(assets)
+          assert all(asset["qa_status"] == "passed" for asset in assets)
+          assert all(asset["production_spec_ref"].endswith("production_spec.json") for asset in assets)
+          print("M3 fixture pipeline verified")
+          PY
