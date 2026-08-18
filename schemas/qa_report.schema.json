@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA QA Report",
+  "type": "object",
+  "required": ["topic_id", "checks", "passed", "status"],
+  "properties": {
+    "topic_id": {"type": "string"},
+    "checks": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "passed", "evidence"],
+        "properties": {
+          "id": {"enum": ["originality", "metadata_completeness", "brand_fit", "source_traceability"]},
+          "label": {"type": "string"},
+          "passed": {"type": "boolean"},
+          "evidence": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "passed": {"type": "boolean"},
+    "status": {"enum": ["complete"]}
+  },
+  "additionalProperties": false
+}
