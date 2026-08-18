@@ -9,6 +9,12 @@ from jsonschema import validate
 
 from pipeline.google_trends import collect_fixture as collect_trends_fixture, collect_live as collect_trends_live
 from pipeline.youtube_intelligence import collect_fixture as collect_youtube_fixture, collect_live as collect_youtube_live
+from pipeline.youtube_benchmark import (
+    advisory_for_product,
+    build_pattern_intelligence,
+    collect_fixture as collect_benchmark_fixture,
+    collect_live as collect_benchmark_live,
+)
 from pipeline.normalizer import normalize_topics
 from pipeline.signal_engineering import build_candidates
 from pipeline.score import load_scoring_config, rank_candidates
@@ -64,12 +70,33 @@ def collect_evidence(config: dict, mode: str) -> tuple[list[dict], list[dict]]:
     return evidence, errors
 
 
+def collect_benchmark(config: dict, mode: str) -> tuple[list[dict], dict[str, dict], list[dict]]:
+    errors: list[dict] = []
+    cache_dir = ROOT / "data" / "cache" / "m2" / "youtube_benchmark"
+    if mode == "fixture":
+        rows = collect_benchmark_fixture()
+    elif mode == "live":
+        try:
+            rows = collect_benchmark_live(
+                region=config.get("region", "TW"),
+                cache_dir=cache_dir,
+            )
+        except Exception as exc:
+            rows = []
+            errors.append({"source": "youtube_benchmark", "error": str(exc)})
+    else:
+        raise ValueError("mode must be fixture or live")
+    return rows, build_pattern_intelligence(rows), errors
+
+
 def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
     config = load_intelligence_config()
     scoring = load_scoring_config(ROOT / "config" / "scoring.yaml")
     products = load_products(ROOT / "config" / "products.yaml")
 
     evidence, source_errors = collect_evidence(config, mode)
+    benchmark_rows, benchmark_patterns, benchmark_errors = collect_benchmark(config, mode)
+    source_errors += benchmark_errors
     canonical = normalize_topics(config["canonical_topics"], evidence)
     candidates = build_candidates(canonical, evidence, model_version=config.get("version", "m2-v1"))
     if len(candidates) != 20:
@@ -82,6 +109,10 @@ def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
     top5[0]["status"] = "selected"
 
     production_spec = build_production_spec(top5[0], products)
+    production_spec.setdefault("metadata", {})["youtube_benchmark"] = advisory_for_product(
+        benchmark_patterns,
+        top5[0]["product"],
+    )
     qa_report = build_qa_report(production_spec, scoring["thresholds"]["originality_minimum"])
     validate(production_spec, json.loads((ROOT / "schemas" / "production_spec.schema.json").read_text()))
     validate(qa_report, json.loads((ROOT / "schemas" / "qa_report.schema.json").read_text()))
@@ -89,6 +120,8 @@ def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
     out = ROOT / "data" / "runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "raw_evidence.json", evidence)
+    _write(out / "youtube_benchmark.json", benchmark_rows)
+    _write(out / "benchmark_patterns.json", benchmark_patterns)
     _write(out / "canonical_topics.json", canonical)
     _write(out / "candidates.json", ranked)
     _write(out / "top5.json", top5)
@@ -99,6 +132,8 @@ def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
         "raw_evidence_count": len(evidence), "candidate_count": len(ranked),
         "shortlist_count": len(top5), "selected_topic_id": top5[0]["id"],
         "selected_product": top5[0]["product"], "qa_passed": qa_report["passed"],
+        "benchmark_sample_count": len(benchmark_rows),
+        "benchmark_products": sum(1 for value in benchmark_patterns.values() if value["sample_count"] > 0),
         "source_errors": source_errors, "final_status": "AWAITING_APPROVAL",
     }
     _write(out / "run_summary.json", summary)
