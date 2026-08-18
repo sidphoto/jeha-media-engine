@@ -40,31 +40,80 @@ def build_request(spec: dict, production_spec_ref: str) -> AssetRequest:
     )
 
 
+def _technical_metadata_valid(record: dict) -> bool:
+    technical = record.get("technical")
+    if not isinstance(technical, dict):
+        return False
+    asset_type = record.get("asset_type")
+    if asset_type in {"music", "sfx"}:
+        duration = technical.get("duration_seconds")
+        sample_rate = technical.get("sample_rate")
+        channels = technical.get("channels")
+        return (
+            isinstance(duration, (int, float))
+            and not isinstance(duration, bool)
+            and duration > 0
+            and isinstance(sample_rate, int)
+            and not isinstance(sample_rate, bool)
+            and sample_rate > 0
+            and isinstance(channels, int)
+            and not isinstance(channels, bool)
+            and channels > 0
+            and isinstance(technical.get("format"), str)
+            and bool(technical["format"].strip())
+        )
+    if asset_type == "visual":
+        width = technical.get("width")
+        height = technical.get("height")
+        return (
+            isinstance(width, int)
+            and not isinstance(width, bool)
+            and width > 0
+            and isinstance(height, int)
+            and not isinstance(height, bool)
+            and height > 0
+            and technical.get("aspect_ratio") == "16:9"
+            and isinstance(technical.get("format"), str)
+            and bool(technical["format"].strip())
+        )
+    return False
+
+
 def _qa_record(record: dict, *, live_mode: bool) -> dict:
+    rights = record.get("rights", {})
     checks = {
         "id_present": bool(record.get("asset_id")),
         "topic_lineage": bool(record.get("topic_id") and record.get("production_spec_ref")),
-        "provider_trace": bool(record.get("provider") and record.get("model")),
-        "rights_present": bool(record.get("rights", {}).get("license")),
-        "commercial_use": record.get("rights", {}).get("commercial_use") is True,
+        "provider_trace": bool(record.get("provider") and record.get("model") and record.get("prompt_or_source")),
+        "rights_present": bool(rights.get("license")),
+        "commercial_use": rights.get("commercial_use") is True,
         "content_hash": str(record.get("content_hash", "")).startswith("sha256:"),
-        "technical_metadata": bool(record.get("technical")),
+        "technical_metadata": _technical_metadata_valid(record),
         "no_fixture_in_live": not (live_mode and record.get("provider") == "jeha_fixture"),
     }
     passed = all(checks.values())
     return {"asset_id": record["asset_id"], "passed": passed, "checks": checks}
 
 
-def generate_asset_bundle(spec: dict, *, mode: str = "fixture", production_spec_ref: str = "production_spec.json") -> dict:
+def generate_asset_bundle(
+    spec: dict,
+    *,
+    mode: str = "fixture",
+    production_spec_ref: str = "production_spec.json",
+    providers: dict[str, object] | None = None,
+) -> dict:
     request = build_request(spec, production_spec_ref)
     if mode == "fixture":
+        if providers is not None:
+            raise ValueError("providers may only be injected in live mode")
         music_provider = FixtureMusicProvider()
         visual_provider = FixtureVisualProvider()
         sfx_provider = FixtureSFXProvider()
     elif mode == "live":
-        music_provider = UnconfiguredLiveProvider("music")
-        visual_provider = UnconfiguredLiveProvider("visual")
-        sfx_provider = UnconfiguredLiveProvider("sfx")
+        selected = providers or {}
+        music_provider = selected.get("music", UnconfiguredLiveProvider("music"))
+        visual_provider = selected.get("visual", UnconfiguredLiveProvider("visual"))
+        sfx_provider = selected.get("sfx", UnconfiguredLiveProvider("sfx"))
     else:
         raise ValueError("mode must be fixture or live")
 
@@ -75,8 +124,19 @@ def generate_asset_bundle(spec: dict, *, mode: str = "fixture", production_spec_
 
     registry = AssetRegistry()
     qa = []
+    seen_ids: set[str] = set()
+    duplicate_ids: set[str] = set()
     for record in generated:
+        asset_id = record.get("asset_id")
+        if asset_id in seen_ids:
+            duplicate_ids.add(asset_id)
+        seen_ids.add(asset_id)
         result = _qa_record(record, live_mode=(mode == "live"))
+        if asset_id in duplicate_ids:
+            result["checks"]["id_unique"] = False
+            result["passed"] = False
+        else:
+            result["checks"]["id_unique"] = True
         record["qa_status"] = "passed" if result["passed"] else "failed"
         registry.register(record)
         qa.append(result)
