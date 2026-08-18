@@ -26,9 +26,12 @@ def _write(path: Path, value: object) -> None:
 
 
 def release_configuration_fingerprint(configuration: dict) -> str:
+    """Fingerprint the underlying M5.4 configuration, excluding the M5.5 approval envelope."""
     payload = copy.deepcopy(configuration)
     payload.pop("configuration_hash", None)
     payload.pop("release_approval", None)
+    if payload.get("final_status") == "RELEASE_APPROVED":
+        payload["final_status"] = "RELEASE_CONFIGURATION_READY"
     return _canonical_hash(payload)
 
 
