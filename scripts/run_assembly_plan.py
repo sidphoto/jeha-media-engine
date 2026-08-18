@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from pipeline.assembly import run_assembly_pipeline
-from pipeline.security import validate_run_id
+from pipeline.security import load_json_validated, validate_run_id
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
@@ -16,6 +19,11 @@ def main() -> None:
     parser.add_argument("--run-id", required=True, type=validate_run_id)
     parser.add_argument("--mode", choices=["dry_run", "production"], required=True)
     args = parser.parse_args()
+    load_json_validated(
+        args.production_spec,
+        ROOT / "schemas" / "production_spec.schema.json",
+        label="M4.1 production spec",
+    )
     out = run_assembly_pipeline(
         args.asset_bundle,
         args.production_spec,
