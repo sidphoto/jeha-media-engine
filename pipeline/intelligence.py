@@ -1,0 +1,96 @@
+"""M2 daily intelligence orchestration feeding the existing M1 pipeline."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import yaml
+from jsonschema import validate
+
+from pipeline.google_trends import collect_fixture as collect_trends_fixture, collect_live as collect_trends_live
+from pipeline.youtube_intelligence import collect_fixture as collect_youtube_fixture, collect_live as collect_youtube_live
+from pipeline.normalizer import normalize_topics
+from pipeline.signal_engineering import build_candidates
+from pipeline.score import load_scoring_config, rank_candidates
+from pipeline.router import load_products, route_top_candidates
+from pipeline.planner import build_production_spec
+from pipeline.qa import build_qa_report
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _write(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def load_intelligence_config(path: str | Path = ROOT / "config" / "intelligence.yaml") -> dict:
+    with Path(path).open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle)
+    if config.get("candidate_count") != 20:
+        raise ValueError("M2 contract requires candidate_count=20")
+    if len(config.get("canonical_topics", [])) != 20:
+        raise ValueError("M2 canonical catalog must contain exactly 20 topics")
+    return config
+
+
+def collect_evidence(config: dict, mode: str) -> tuple[list[dict], list[dict]]:
+    errors = []
+    evidence = []
+    if mode == "fixture":
+        evidence += collect_trends_fixture(config["seeds"], config["trends_windows"])
+        evidence += collect_youtube_fixture(config["canonical_topics"])
+    elif mode == "live":
+        try:
+            evidence += collect_trends_live(config["seeds"], config["trends_windows"])
+        except Exception as exc:  # source isolation is intentional
+            errors.append({"source": "google_trends", "error": str(exc)})
+        try:
+            evidence += collect_youtube_live([item["title"] for item in config["canonical_topics"]], region=config.get("region", "TW"))
+        except Exception as exc:  # source isolation is intentional
+            errors.append({"source": "youtube", "error": str(exc)})
+    else:
+        raise ValueError("mode must be fixture or live")
+    if len(evidence) < int(config.get("raw_topic_minimum", 50)):
+        raise RuntimeError(f"Insufficient market evidence: {len(evidence)} observations; errors={errors}")
+    return evidence, errors
+
+
+def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
+    config = load_intelligence_config()
+    scoring = load_scoring_config(ROOT / "config" / "scoring.yaml")
+    products = load_products(ROOT / "config" / "products.yaml")
+
+    evidence, source_errors = collect_evidence(config, mode)
+    canonical = normalize_topics(config["canonical_topics"], evidence)
+    candidates = build_candidates(canonical, evidence)
+    if len(candidates) != 20:
+        raise RuntimeError(f"Expected exactly 20 M2 candidates, got {len(candidates)}")
+
+    ranked = rank_candidates(candidates, scoring)
+    top5 = route_top_candidates(ranked[: scoring["thresholds"]["shortlist_count"]], products)
+    for item in top5:
+        item["status"] = "shortlisted"
+    top5[0]["status"] = "selected"
+
+    production_spec = build_production_spec(top5[0], products)
+    qa_report = build_qa_report(production_spec, scoring["thresholds"]["originality_minimum"])
+    validate(production_spec, json.loads((ROOT / "schemas" / "production_spec.schema.json").read_text()))
+    validate(qa_report, json.loads((ROOT / "schemas" / "qa_report.schema.json").read_text()))
+
+    out = ROOT / "data" / "runs" / run_id
+    out.mkdir(parents=True, exist_ok=False)
+    _write(out / "raw_evidence.json", evidence)
+    _write(out / "canonical_topics.json", canonical)
+    _write(out / "candidates.json", ranked)
+    _write(out / "top5.json", top5)
+    _write(out / "production_spec.json", production_spec)
+    _write(out / "qa_report.json", qa_report)
+    summary = {
+        "run_id": run_id, "pipeline_version": "M2", "mode": mode,
+        "raw_evidence_count": len(evidence), "candidate_count": len(ranked),
+        "shortlist_count": len(top5), "selected_topic_id": top5[0]["id"],
+        "selected_product": top5[0]["product"], "qa_passed": qa_report["passed"],
+        "source_errors": source_errors, "final_status": "AWAITING_APPROVAL",
+    }
+    _write(out / "run_summary.json", summary)
+    return out
