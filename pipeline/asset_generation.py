@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from pipeline.assets import AssetRegistry
@@ -13,6 +14,7 @@ from pipeline.providers import (
     FixtureVisualProvider,
     UnconfiguredLiveProvider,
 )
+from pipeline.sfx_library import LocalSFXLibraryProvider
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,6 +101,44 @@ def _qa_record(record: dict, *, live_mode: bool) -> dict:
     return {"asset_id": record["asset_id"], "passed": passed, "checks": checks}
 
 
+def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple[object, object, object]:
+    """Resolve and preflight every live dependency before any paid/external generation."""
+    errors: list[str] = []
+
+    if "music" in selected:
+        music_provider = selected["music"]
+    else:
+        music_provider = ElevenLabsMusicProvider()
+        if not music_provider.api_key:
+            errors.append("ELEVENLABS_API_KEY is required for live ElevenLabs Music generation")
+        if not music_provider.commercial_use_ack:
+            errors.append("ELEVENLABS_COMMERCIAL_USE_ACK=true is required after commercial-use review")
+
+    if "visual" in selected:
+        visual_provider = selected["visual"]
+    else:
+        visual_provider = UnconfiguredLiveProvider("visual")
+        errors.append("Live visual provider is not configured")
+
+    if "sfx" in selected:
+        sfx_provider = selected["sfx"]
+    elif request.sfx_type:
+        manifest = os.getenv("JEHA_SFX_MANIFEST")
+        if manifest:
+            sfx_provider = LocalSFXLibraryProvider(manifest_path=manifest)
+        else:
+            sfx_provider = UnconfiguredLiveProvider("sfx")
+            errors.append(
+                "JEHA_SFX_MANIFEST is required when live Production Spec requests SFX"
+            )
+    else:
+        sfx_provider = UnconfiguredLiveProvider("sfx")
+
+    if errors:
+        raise RuntimeError("Live provider preflight failed: " + "; ".join(errors))
+    return music_provider, visual_provider, sfx_provider
+
+
 def generate_asset_bundle(
     spec: dict,
     *,
@@ -114,10 +154,7 @@ def generate_asset_bundle(
         visual_provider = FixtureVisualProvider()
         sfx_provider = FixtureSFXProvider()
     elif mode == "live":
-        selected = providers or {}
-        music_provider = selected.get("music", ElevenLabsMusicProvider())
-        visual_provider = selected.get("visual", UnconfiguredLiveProvider("visual"))
-        sfx_provider = selected.get("sfx", UnconfiguredLiveProvider("sfx"))
+        music_provider, visual_provider, sfx_provider = _live_providers(request, providers or {})
     else:
         raise ValueError("mode must be fixture or live")
 
