@@ -19,6 +19,7 @@ from jsonschema import validate
 
 ROOT = Path(__file__).resolve().parents[1]
 UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/youtube/v3/videos"
+DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024
 
 
 def _sha256_file(path: Path) -> str:
@@ -86,7 +87,12 @@ class FixtureYouTubeUploader:
 
 
 class YouTubeResumableTransport:
-    """Stream one file through an official resumable upload session without buffering it all."""
+    """Upload in resumable-session chunks so long JEHA masters are not buffered in memory."""
+
+    def __init__(self, *, chunk_size: int = DEFAULT_CHUNK_SIZE) -> None:
+        if chunk_size <= 0 or chunk_size % (256 * 1024) != 0:
+            raise ValueError("YouTube upload chunk_size must be a positive multiple of 256 KiB")
+        self.chunk_size = chunk_size
 
     def _connection(self, url: str) -> tuple[http.client.HTTPSConnection, str]:
         parsed = urlparse(url)
@@ -96,6 +102,23 @@ class YouTubeResumableTransport:
         if parsed.query:
             target += "?" + parsed.query
         return http.client.HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=180), target
+
+    def _put_chunk(self, location: str, access_token: str, chunk: bytes, start: int, total: int) -> tuple[int, dict[str, str], bytes]:
+        end = start + len(chunk) - 1
+        conn, target = self._connection(location)
+        conn.putrequest("PUT", target)
+        conn.putheader("Authorization", f"Bearer {access_token}")
+        conn.putheader("Content-Type", "video/mp4")
+        conn.putheader("Content-Length", str(len(chunk)))
+        conn.putheader("Content-Range", f"bytes {start}-{end}/{total}")
+        conn.endheaders()
+        conn.send(chunk)
+        response = conn.getresponse()
+        payload = response.read()
+        headers = {key.lower(): value for key, value in response.getheaders()}
+        status = response.status
+        conn.close()
+        return status, headers, payload
 
     def upload(self, *, video_path: Path, resource: dict, access_token: str) -> dict:
         size = video_path.stat().st_size
@@ -123,26 +146,31 @@ class YouTubeResumableTransport:
         if status not in {200, 201} or not location:
             raise RuntimeError(f"YouTube resumable session initiation failed: HTTP {status}")
 
-        upload_conn, upload_target = self._connection(location)
-        upload_conn.putrequest("PUT", upload_target)
-        upload_conn.putheader("Authorization", f"Bearer {access_token}")
-        upload_conn.putheader("Content-Type", "video/mp4")
-        upload_conn.putheader("Content-Length", str(size))
-        upload_conn.putheader("Content-Range", f"bytes 0-{size - 1}/{size}")
-        upload_conn.endheaders()
+        offset = 0
         with video_path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                upload_conn.send(chunk)
-        upload_response = upload_conn.getresponse()
-        payload = upload_response.read()
-        upload_status = upload_response.status
-        upload_conn.close()
-        if upload_status not in {200, 201}:
-            raise RuntimeError(f"YouTube upload failed: HTTP {upload_status}")
-        parsed = json.loads(payload.decode("utf-8")) if payload else {}
-        if not parsed.get("id"):
-            raise RuntimeError("YouTube upload response did not contain a video id")
-        return parsed
+            while offset < size:
+                handle.seek(offset)
+                chunk = handle.read(min(self.chunk_size, size - offset))
+                if not chunk:
+                    raise RuntimeError("YouTube upload encountered an unexpected empty source chunk")
+                upload_status, headers, payload = self._put_chunk(location, access_token, chunk, offset, size)
+                if upload_status == 308:
+                    range_value = headers.get("range")
+                    if range_value and "-" in range_value:
+                        acknowledged = int(range_value.rsplit("-", 1)[1]) + 1
+                        if acknowledged <= offset or acknowledged > size:
+                            raise RuntimeError("YouTube resumable upload returned an invalid acknowledged range")
+                        offset = acknowledged
+                    else:
+                        offset += len(chunk)
+                    continue
+                if upload_status not in {200, 201}:
+                    raise RuntimeError(f"YouTube upload failed: HTTP {upload_status}")
+                parsed = json.loads(payload.decode("utf-8")) if payload else {}
+                if not parsed.get("id"):
+                    raise RuntimeError("YouTube upload response did not contain a video id")
+                return parsed
+        raise RuntimeError("YouTube resumable upload ended without a completion response")
 
 
 def run_private_upload(
@@ -180,11 +208,11 @@ def run_private_upload(
 
     response = uploader.upload(video_path=video_path, resource=resource, access_token=token)
     remote_id = response.get("id")
-    remote_privacy = response.get("status", {}).get("privacyStatus", "private")
+    remote_privacy = response.get("status", {}).get("privacyStatus")
     if not remote_id:
         raise RuntimeError("M5.3 uploader returned no remote video id")
     if remote_privacy != "private":
-        raise RuntimeError("M5.3 uploader returned non-private visibility")
+        raise RuntimeError("M5.3 uploader did not explicitly confirm private visibility")
 
     return {
         "upload_record_id": "UPLOAD-" + publish_plan["video_id"].removeprefix("VIDEO-"),
