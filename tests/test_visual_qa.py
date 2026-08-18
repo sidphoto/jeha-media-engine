@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pipeline.visual_qa import STYLE_PRESET, evaluate_visual_qa, validate_visual_lineage, visual_policy
+from pipeline.visual_qa import HARD_FAIL_KEYS, STYLE_PRESET, evaluate_visual_qa, validate_visual_lineage, visual_policy
 
 
 def assessment(score: int, **hard_fail):
@@ -34,6 +34,17 @@ def test_hard_fail_overrides_high_score():
     assert result["gate"] == "FAIL"
     assert result["production_ready"] is False
     assert result["hard_fail_reasons"] == ["pseudo_text"]
+
+
+@pytest.mark.parametrize("hard_fail_key", HARD_FAIL_KEYS)
+def test_every_hard_fail_key_overrides_high_score(hard_fail_key):
+    """Only pseudo_text was previously exercised; the other HARD_FAIL_KEYS entries
+    (watermark_or_logo, major_structural_artifact, unknown_rights, non_16_9_master,
+    production_spec_mismatch, missing_prompt_lineage) had no regression coverage."""
+    result = evaluate_visual_qa(assessment(98, **{hard_fail_key: True}))
+    assert result["gate"] == "FAIL"
+    assert result["production_ready"] is False
+    assert result["hard_fail_reasons"] == [hard_fail_key]
 
 
 def test_missing_or_invalid_component_is_rejected():

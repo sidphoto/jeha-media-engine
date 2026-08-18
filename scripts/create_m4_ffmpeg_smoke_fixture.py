@@ -82,7 +82,7 @@ def main() -> None:
                     "height": 1080,
                     "aspect_ratio": "16:9",
                     "format": "png",
-                    "style_preset": "jeha_cinematic_dreamy_realism_v1",
+                    "style_preset": "jeha_cinematic_dreamy_realism_v2",
                     "reference_lineage": [],
                 },
                 "rights": {"commercial_use": True, "license": "CI_SYNTHETIC"},
@@ -151,7 +151,7 @@ def main() -> None:
         "source_visual": {
             "asset_id": visual_id,
             "content_hash": bundle["assets"][1]["content_hash"],
-            "style_preset": "jeha_cinematic_dreamy_realism_v1",
+            "style_preset": "jeha_cinematic_dreamy_realism_v2",
         },
         "execution_profile": {
             "width": 1920,
