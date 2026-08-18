@@ -84,8 +84,10 @@ def test_sfx_is_optional_when_topic_has_no_environmental_tag():
     assert bundle["final_status"] == "AWAITING_APPROVAL"
 
 
-def test_live_mode_fails_explicitly_instead_of_substituting_fixture():
-    with pytest.raises(RuntimeError, match="Live music provider is not configured"):
+def test_live_mode_uses_elevenlabs_and_fails_explicitly_without_key(monkeypatch):
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    monkeypatch.delenv("ELEVENLABS_COMMERCIAL_USE_ACK", raising=False)
+    with pytest.raises(RuntimeError, match="ELEVENLABS_API_KEY"):
         generate_asset_bundle(sample_spec(), mode="live", production_spec_ref="spec.json")
 
 

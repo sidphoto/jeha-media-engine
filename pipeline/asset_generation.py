@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from pipeline.assets import AssetRegistry
+from pipeline.elevenlabs_music import ElevenLabsMusicProvider
 from pipeline.providers import (
     AssetRequest,
     FixtureMusicProvider,
@@ -49,6 +50,11 @@ def _technical_metadata_valid(record: dict) -> bool:
         duration = technical.get("duration_seconds")
         sample_rate = technical.get("sample_rate")
         channels = technical.get("channels")
+        channels_valid = channels is None or (
+            isinstance(channels, int)
+            and not isinstance(channels, bool)
+            and channels > 0
+        )
         return (
             isinstance(duration, (int, float))
             and not isinstance(duration, bool)
@@ -56,9 +62,7 @@ def _technical_metadata_valid(record: dict) -> bool:
             and isinstance(sample_rate, int)
             and not isinstance(sample_rate, bool)
             and sample_rate > 0
-            and isinstance(channels, int)
-            and not isinstance(channels, bool)
-            and channels > 0
+            and channels_valid
             and isinstance(technical.get("format"), str)
             and bool(technical["format"].strip())
         )
@@ -111,7 +115,7 @@ def generate_asset_bundle(
         sfx_provider = FixtureSFXProvider()
     elif mode == "live":
         selected = providers or {}
-        music_provider = selected.get("music", UnconfiguredLiveProvider("music"))
+        music_provider = selected.get("music", ElevenLabsMusicProvider())
         visual_provider = selected.get("visual", UnconfiguredLiveProvider("visual"))
         sfx_provider = selected.get("sfx", UnconfiguredLiveProvider("sfx"))
     else:
