@@ -34,22 +34,31 @@ def load_intelligence_config(path: str | Path = ROOT / "config" / "intelligence.
 
 
 def collect_evidence(config: dict, mode: str) -> tuple[list[dict], list[dict]]:
-    errors = []
-    evidence = []
+    errors: list[dict] = []
+    evidence: list[dict] = []
+    cache_dir = ROOT / "data" / "cache" / "m2"
     if mode == "fixture":
         evidence += collect_trends_fixture(config["seeds"], config["trends_windows"])
         evidence += collect_youtube_fixture(config["canonical_topics"])
     elif mode == "live":
         try:
-            evidence += collect_trends_live(config["seeds"], config["trends_windows"])
+            evidence += collect_trends_live(config["seeds"], config["trends_windows"], cache_dir=cache_dir / "trends")
         except Exception as exc:  # source isolation is intentional
             errors.append({"source": "google_trends", "error": str(exc)})
         try:
-            evidence += collect_youtube_live([item["title"] for item in config["canonical_topics"]], region=config.get("region", "TW"))
+            evidence += collect_youtube_live(
+                [item["title"] for item in config["canonical_topics"]],
+                region=config.get("region", "TW"),
+                cache_dir=cache_dir / "youtube",
+            )
         except Exception as exc:  # source isolation is intentional
             errors.append({"source": "youtube", "error": str(exc)})
     else:
         raise ValueError("mode must be fixture or live")
+
+    schema = json.loads((ROOT / "schemas" / "market_evidence.schema.json").read_text())
+    for row in evidence:
+        validate(row, schema)
     if len(evidence) < int(config.get("raw_topic_minimum", 50)):
         raise RuntimeError(f"Insufficient market evidence: {len(evidence)} observations; errors={errors}")
     return evidence, errors
@@ -62,7 +71,7 @@ def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
 
     evidence, source_errors = collect_evidence(config, mode)
     canonical = normalize_topics(config["canonical_topics"], evidence)
-    candidates = build_candidates(canonical, evidence)
+    candidates = build_candidates(canonical, evidence, model_version=config.get("version", "m2-v1"))
     if len(candidates) != 20:
         raise RuntimeError(f"Expected exactly 20 M2 candidates, got {len(candidates)}")
 
@@ -86,7 +95,7 @@ def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
     _write(out / "production_spec.json", production_spec)
     _write(out / "qa_report.json", qa_report)
     summary = {
-        "run_id": run_id, "pipeline_version": "M2", "mode": mode,
+        "run_id": run_id, "pipeline_version": "M2", "signal_model_version": config.get("version", "m2-v1"), "mode": mode,
         "raw_evidence_count": len(evidence), "candidate_count": len(ranked),
         "shortlist_count": len(top5), "selected_topic_id": top5[0]["id"],
         "selected_product": top5[0]["product"], "qa_passed": qa_report["passed"],
