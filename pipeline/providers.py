@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pipeline.assets import build_fixture_asset
 from pipeline.visual_qa import STYLE_PRESET
 
+MAX_FIXTURE_MUSIC_MASTER_SECONDS = 600
+
 
 @dataclass(frozen=True)
 class AssetRequest:
@@ -37,6 +39,8 @@ def sequence_from_topic_id(topic_id: str) -> int:
 
 class FixtureMusicProvider:
     def generate(self, request: AssetRequest) -> dict:
+        requested_seconds = request.duration_minutes * 60
+        master_seconds = min(requested_seconds, MAX_FIXTURE_MUSIC_MASTER_SECONDS)
         return build_fixture_asset(
             asset_type="music",
             namespace=request.product.replace("_room", ""),
@@ -44,7 +48,15 @@ class FixtureMusicProvider:
             topic_id=request.topic_id,
             production_spec_ref=request.production_spec_ref,
             prompt_or_source=request.music_brief,
-            technical={"duration_seconds": request.duration_minutes * 60, "format": "wav", "sample_rate": 48000, "channels": 2},
+            technical={
+                "duration_seconds": master_seconds,
+                "format": "wav",
+                "sample_rate": 48000,
+                "channels": 2,
+                "requested_program_minutes": request.duration_minutes,
+                "master_generation_minutes": master_seconds / 60,
+                "fixture_contract": "production_master_duration_cap",
+            },
         )
 
 
