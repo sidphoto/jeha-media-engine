@@ -4,7 +4,10 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from urllib.request import Request, urlopen
+from pathlib import Path
+from urllib.request import Request
+
+from pipeline.http_utils import request_json
 
 
 def _now() -> str:
@@ -25,12 +28,11 @@ def collect_fixture(seeds: list[str], windows: list[str], collected_at: str = "2
     return evidence
 
 
-def collect_live(seeds: list[str], windows: list[str]) -> list[dict]:
+def collect_live(seeds: list[str], windows: list[str], cache_dir: Path | None = None) -> list[dict]:
     """Call a Google Trends API alpha endpoint supplied to approved testers.
 
-    The public alpha documentation does not publish a universal endpoint/auth contract,
-    so deployment must provide GOOGLE_TRENDS_API_URL and GOOGLE_TRENDS_API_TOKEN.
-    Expected response: {"observations": [{"keyword", "window", "raw_value", "growth_rate"?}, ...]}.
+    Google currently limits the official Trends API to alpha testers. Deployment provides
+    its approved endpoint/token through environment variables; no credential is committed.
     """
     endpoint = os.getenv("GOOGLE_TRENDS_API_URL")
     token = os.getenv("GOOGLE_TRENDS_API_TOKEN")
@@ -38,8 +40,7 @@ def collect_live(seeds: list[str], windows: list[str]) -> list[dict]:
         raise RuntimeError("Google Trends live mode requires GOOGLE_TRENDS_API_URL and GOOGLE_TRENDS_API_TOKEN")
     payload = json.dumps({"keywords": seeds, "windows": windows}).encode()
     req = Request(endpoint, data=payload, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-    with urlopen(req, timeout=30) as response:  # noqa: S310 - configured trusted endpoint
-        data = json.loads(response.read().decode())
+    data = request_json(req, cache_dir=cache_dir, cache_ttl_seconds=3600, retries=2)
     out = []
     collected_at = _now()
     for index, item in enumerate(data.get("observations", [])):
