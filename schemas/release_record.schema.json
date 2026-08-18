@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M5 Final Release Record",
+  "type": "object",
+  "required": ["release_record_id","control_id","upload_record_id","remote_video_id","publish_plan_id","metadata_package_id","delivery_package_id","video_id","topic_id","product","source_package_hash","source_master_hash","source_configuration_hash","release_approval","target_visibility","schedule","thumbnail","release_action","remote_execution_required","remote_execution_allowed","credential_material_persisted","final_status","release_record_hash"],
+  "properties": {
+    "release_record_id": {"type":"string","pattern":"^RELEASE-[A-Z]+-[0-9]{6}$"},
+    "control_id": {"type":"string","pattern":"^CONTROL-"},
+    "upload_record_id": {"type":"string","pattern":"^UPLOAD-"},
+    "remote_video_id": {"type":"string","minLength":1},
+    "publish_plan_id": {"type":"string","pattern":"^PUBLISH-"},
+    "metadata_package_id": {"type":"string","pattern":"^META-"},
+    "delivery_package_id": {"type":"string","pattern":"^DELIVERY-"},
+    "video_id": {"type":"string","pattern":"^VIDEO-"},
+    "topic_id": {"type":"string","minLength":1},
+    "product": {"enum":["flow_room","moon_room","cozy_room","nature_room"]},
+    "source_package_hash": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "source_master_hash": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "source_configuration_hash": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "release_approval": {
+      "type":"object",
+      "required":["decision","approver","approved_at","configuration_hash"],
+      "properties": {
+        "decision":{"const":"approved"},
+        "approver":{"type":"string","minLength":1},
+        "approved_at":{"type":"string","minLength":1},
+        "configuration_hash":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "target_visibility":{"enum":["private","unlisted","public"]},
+    "schedule":{"type":"object"},
+    "thumbnail":{"type":["object","null"]},
+    "release_action":{"enum":["remain_private","apply_thumbnail_private","switch_unlisted","publish_public","schedule_public_release"]},
+    "remote_execution_required":{"type":"boolean"},
+    "remote_execution_allowed":{"const":false},
+    "credential_material_persisted":{"const":false},
+    "final_status":{"enum":["RELEASE_EXECUTION_APPROVED","RELEASE_REGISTRY_FINALIZED_PRIVATE"]},
+    "release_record_hash":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}
