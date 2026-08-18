@@ -50,6 +50,11 @@ def _technical_metadata_valid(record: dict) -> bool:
         duration = technical.get("duration_seconds")
         sample_rate = technical.get("sample_rate")
         channels = technical.get("channels")
+        channels_valid = channels is None or (
+            isinstance(channels, int)
+            and not isinstance(channels, bool)
+            and channels > 0
+        )
         return (
             isinstance(duration, (int, float))
             and not isinstance(duration, bool)
@@ -57,9 +62,7 @@ def _technical_metadata_valid(record: dict) -> bool:
             and isinstance(sample_rate, int)
             and not isinstance(sample_rate, bool)
             and sample_rate > 0
-            and isinstance(channels, int)
-            and not isinstance(channels, bool)
-            and channels > 0
+            and channels_valid
             and isinstance(technical.get("format"), str)
             and bool(technical["format"].strip())
         )
