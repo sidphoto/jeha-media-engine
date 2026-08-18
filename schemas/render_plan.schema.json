@@ -7,6 +7,8 @@
     "video_id",
     "topic_id",
     "product",
+    "assembly_mode",
+    "source_asset_mode",
     "source_bundle_hash",
     "approval",
     "lineage",
@@ -18,6 +20,8 @@
     "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
     "topic_id": {"type": "string", "minLength": 1},
     "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "assembly_mode": {"enum": ["dry_run", "production"]},
+    "source_asset_mode": {"enum": ["fixture", "live"]},
     "source_bundle_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "approval": {
       "type": "object",
