@@ -89,3 +89,49 @@ jobs:
           assert all(asset["production_spec_ref"].endswith("production_spec.json") for asset in assets)
           print("M3 fixture pipeline verified")
           PY
+
+      - name: Create CI-only explicit M3 approval record
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from pipeline.assembly import asset_bundle_fingerprint
+          bundle_path = Path("data/asset_runs/ci-m3/asset_bundle.json")
+          bundle = json.loads(bundle_path.read_text())
+          approval = {
+              "decision": "approved",
+              "approver": "ci-fixture-human-gate",
+              "approved_at": "2026-08-18T00:00:00+00:00",
+              "asset_bundle_hash": asset_bundle_fingerprint(bundle),
+          }
+          Path("data/asset_runs/ci-m3/approval.json").write_text(json.dumps(approval, indent=2) + "\n")
+          PY
+
+      - name: M4.1 approval-bound assembly smoke test
+        run: >-
+          python scripts/run_assembly_plan.py
+          data/asset_runs/ci-m3/asset_bundle.json
+          data/runs/ci-m2/production_spec.json
+          data/asset_runs/ci-m3/approval.json
+          --run-id ci-m4
+
+      - name: Verify M4.1 render plan and human gate lineage
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("data/render_runs/ci-m4")
+          plan = json.loads((root / "render_plan.json").read_text())
+          summary = json.loads((root / "run_summary.json").read_text())
+          approved = json.loads((root / "approved_asset_bundle.json").read_text())
+          assert plan["final_status"] == "READY_FOR_RENDER", plan
+          assert summary["pipeline_version"] == "M4.1", summary
+          assert summary["final_status"] == "READY_FOR_RENDER", summary
+          assert approved["final_status"] == "APPROVED", approved
+          assert plan["approval"]["decision"] == "approved", plan
+          assert plan["approval"]["asset_bundle_hash"] == plan["source_bundle_hash"], plan
+          assert plan["lineage"]["music_id"].startswith("MUSIC-"), plan
+          assert plan["lineage"]["visual_id"].startswith("VISUAL-"), plan
+          assert plan["video_id"].startswith("VIDEO-"), plan
+          print("M4.1 approval-bound render planning verified")
+          PY
