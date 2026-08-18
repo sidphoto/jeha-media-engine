@@ -1,11 +1,12 @@
 """M2 YouTube market-evidence collector."""
 from __future__ import annotations
 
-import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlencode
-from urllib.request import urlopen
+
+from pipeline.http_utils import request_json
 
 
 def collect_fixture(topics: list[dict], collected_at: str = "2026-08-18T00:00:00+00:00") -> list[dict]:
@@ -27,12 +28,7 @@ def collect_fixture(topics: list[dict], collected_at: str = "2026-08-18T00:00:00
     return rows
 
 
-def _get_json(url: str) -> dict:
-    with urlopen(url, timeout=30) as response:  # noqa: S310 - Google API endpoint
-        return json.loads(response.read().decode())
-
-
-def collect_live(queries: list[str], region: str = "TW", max_results: int = 10) -> list[dict]:
+def collect_live(queries: list[str], region: str = "TW", max_results: int = 10, cache_dir: Path | None = None) -> list[dict]:
     key = os.getenv("YOUTUBE_API_KEY")
     if not key:
         raise RuntimeError("YouTube live mode requires YOUTUBE_API_KEY")
@@ -40,12 +36,13 @@ def collect_live(queries: list[str], region: str = "TW", max_results: int = 10) 
     out = []
     for query in queries:
         params = urlencode({"part": "snippet", "q": query, "type": "video", "maxResults": max_results, "regionCode": region, "key": key})
-        search = _get_json(f"https://www.googleapis.com/youtube/v3/search?{params}")
+        search = request_json(f"https://www.googleapis.com/youtube/v3/search?{params}", cache_dir=cache_dir, cache_ttl_seconds=1800, retries=2)
         ids = [item["id"]["videoId"] for item in search.get("items", []) if item.get("id", {}).get("videoId")]
         stats = {}
         if ids:
             vparams = urlencode({"part": "statistics,snippet", "id": ",".join(ids), "key": key})
-            for item in _get_json(f"https://www.googleapis.com/youtube/v3/videos?{vparams}").get("items", []):
+            details = request_json(f"https://www.googleapis.com/youtube/v3/videos?{vparams}", cache_dir=cache_dir, cache_ttl_seconds=1800, retries=2)
+            for item in details.get("items", []):
                 stats[item["id"]] = item
         for item in search.get("items", []):
             video_id = item.get("id", {}).get("videoId")
