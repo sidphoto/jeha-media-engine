@@ -119,6 +119,8 @@ def build_render_plan(bundle: dict, production_spec: dict, *, assembly_mode: str
         raise ValueError("M4 requires unique asset IDs")
     if any(item.get("qa_status") != "passed" for item in assets):
         raise ValueError("M4 rejects assets that did not pass M3 QA")
+    if assembly_mode == "production" and any(item.get("provider") == "jeha_fixture" for item in assets):
+        raise ValueError("M4 production assembly rejects fixture asset providers")
 
     spec_ref = assets[0].get("production_spec_ref")
     if not spec_ref or any(item.get("production_spec_ref") != spec_ref for item in assets):
