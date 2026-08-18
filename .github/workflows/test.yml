@@ -107,13 +107,14 @@ jobs:
           Path("data/asset_runs/ci-m3/approval.json").write_text(json.dumps(approval, indent=2) + "\n")
           PY
 
-      - name: M4.1 approval-bound assembly smoke test
+      - name: M4.1 approval-bound dry-run assembly smoke test
         run: >-
           python scripts/run_assembly_plan.py
           data/asset_runs/ci-m3/asset_bundle.json
           data/runs/ci-m2/production_spec.json
           data/asset_runs/ci-m3/approval.json
           --run-id ci-m4
+          --mode dry_run
 
       - name: Verify M4.1 render plan and human gate lineage
         run: |
@@ -125,7 +126,11 @@ jobs:
           summary = json.loads((root / "run_summary.json").read_text())
           approved = json.loads((root / "approved_asset_bundle.json").read_text())
           assert plan["final_status"] == "READY_FOR_RENDER", plan
+          assert plan["assembly_mode"] == "dry_run", plan
+          assert plan["source_asset_mode"] == "fixture", plan
           assert summary["pipeline_version"] == "M4.1", summary
+          assert summary["assembly_mode"] == "dry_run", summary
+          assert summary["source_asset_mode"] == "fixture", summary
           assert summary["final_status"] == "READY_FOR_RENDER", summary
           assert approved["final_status"] == "APPROVED", approved
           assert plan["approval"]["decision"] == "approved", plan
@@ -133,5 +138,5 @@ jobs:
           assert plan["lineage"]["music_id"].startswith("MUSIC-"), plan
           assert plan["lineage"]["visual_id"].startswith("VISUAL-"), plan
           assert plan["video_id"].startswith("VIDEO-"), plan
-          print("M4.1 approval-bound render planning verified")
+          print("M4.1 approval-bound dry-run render planning verified")
           PY
