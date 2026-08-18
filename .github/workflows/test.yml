@@ -1,4 +1,4 @@
-name: M1 CI
+name: JEHA CI
 
 on:
   push:
@@ -24,16 +24,33 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Pipeline smoke test
-        run: python scripts/run_daily_pipeline.py --run-id ci-test
+      - name: M1 pipeline smoke test
+        run: python scripts/run_daily_pipeline.py --run-id ci-m1
 
-      - name: Verify approval gate
+      - name: Verify M1 approval gate
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-
-          summary = json.loads(Path("data/runs/ci-test/run_summary.json").read_text())
+          summary = json.loads(Path("data/runs/ci-m1/run_summary.json").read_text())
           assert summary["final_status"] == "AWAITING_APPROVAL", summary
-          print("final_status=AWAITING_APPROVAL")
+          PY
+
+      - name: M2 intelligence fixture smoke test
+        run: python scripts/run_intelligence_pipeline.py --run-id ci-m2 --mode fixture
+
+      - name: Verify M2 evidence and approval gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("data/runs/ci-m2")
+          summary = json.loads((root / "run_summary.json").read_text())
+          top5 = json.loads((root / "top5.json").read_text())
+          assert summary["raw_evidence_count"] >= 50, summary
+          assert summary["candidate_count"] == 20, summary
+          assert summary["shortlist_count"] == 5, summary
+          assert summary["final_status"] == "AWAITING_APPROVAL", summary
+          assert len(top5) == 5
+          print("M2 fixture pipeline verified")
           PY

@@ -15,14 +15,6 @@
 7. 後續串接音樂、視覺、FFmpeg 與 YouTube 發布
 8. 將 Analytics 回饋下一輪選題
 
-## MVP v1
-
-第一版先驗證：
-
-`20 candidates -> score -> Top 5 -> product route -> Top 1 production spec -> QA checklist -> AWAITING_APPROVAL`
-
-目前不直接自動公開影片；發布前保留 Human Gate。
-
 ## Products
 
 - **Flow Room** — Focus / Study / Coding / Pomodoro
@@ -30,39 +22,45 @@
 - **Cozy Room** — Café / Reading / Lifestyle
 - **Nature Room** — Rain / Forest / Ocean / Environmental sounds
 
-## Pipeline
+## M1 — deterministic planning pipeline
 
 ```text
-Research
-  -> Topic Scoring
-  -> Product Router
-  -> Production Planner
-  -> QA Gate
-  -> Human Approval
-  -> Publisher (v2)
-  -> Analytics (v2)
-  -> Research
+20 candidates -> score -> Top 5 -> product route -> Top 1 Production Spec -> QA -> AWAITING_APPROVAL
 ```
-
-## Run M1 locally
-
-Python 3.11+ is recommended.
 
 ```bash
 python3 -m pip install -e ".[dev]"
-python3 scripts/run_daily_pipeline.py
-```
-
-For a reproducible run with a known output path:
-
-```bash
 python3 scripts/run_daily_pipeline.py --run-id m1-demo
 ```
 
-Sample output path:
+## M2 — Live Topic Intelligence
+
+M2 replaces curated topic selection with traceable market evidence while reusing the M1 scorer/router/planner.
 
 ```text
-data/runs/m1-demo/
+Google Trends + YouTube evidence
+  -> Raw Evidence
+  -> Normalize / Dedup
+  -> exactly 20 candidates
+  -> M1 Scoring
+  -> Top 5
+  -> Production Spec
+  -> QA
+  -> AWAITING_APPROVAL
+```
+
+Deterministic fixture mode (CI-safe, no network):
+
+```bash
+python3 scripts/run_intelligence_pipeline.py --run-id m2-demo --mode fixture
+```
+
+Outputs include:
+
+```text
+data/runs/m2-demo/
+├── raw_evidence.json
+├── canonical_topics.json
 ├── candidates.json
 ├── top5.json
 ├── production_spec.json
@@ -70,23 +68,35 @@ data/runs/m1-demo/
 └── run_summary.json
 ```
 
-A successful M1 run ends with:
+Live mode:
 
-```json
-{
-  "final_status": "AWAITING_APPROVAL"
-}
+```bash
+export YOUTUBE_API_KEY="..."
+# Google Trends official API remains limited-access alpha. Approved testers may also set:
+export GOOGLE_TRENDS_API_URL="..."
+export GOOGLE_TRENDS_API_TOKEN="..."
+python3 scripts/run_intelligence_pipeline.py --run-id m2-live --mode live
 ```
 
-Run tests with:
+Live sources are isolated: one source may fail and be reported in `source_errors`; the run only continues when enough traceable evidence remains. API responses use bounded retry/rate-limit handling and a local cache. Credentials are never written to repository files.
+
+Missing JEHA historical performance is represented as numeric `0` only because the M1 scorer requires a number; provenance explicitly marks it `unavailable` / `zero_unavailable`, so the value is never presented as observed history.
+
+## Tests
 
 ```bash
 pytest -q
 ```
 
-## M1 boundaries
+CI verifies both M1 and M2 fixture smoke paths and requires the final status to remain:
 
-M1 is planning/selection only. It does not call external trend APIs, generate music or images, render media with FFmpeg, upload to YouTube, or publish publicly.
+```json
+{"final_status": "AWAITING_APPROVAL"}
+```
+
+## Current boundaries
+
+M1/M2 do not generate music or images, render media with FFmpeg, upload to YouTube, publish publicly, or implement the M6 analytics feedback loop.
 
 ## Project principle
 

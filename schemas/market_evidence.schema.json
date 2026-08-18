@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA Market Evidence",
+  "type": "object",
+  "required": ["id", "source", "collected_at", "source_trace"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "source": {"enum": ["google_trends", "youtube"]},
+    "keyword": {"type": "string"},
+    "query": {"type": "string"},
+    "canonical_key": {"type": "string"},
+    "window": {"type": "string"},
+    "raw_value": {"type": "number", "minimum": 0, "maximum": 100},
+    "growth_rate": {"type": ["number", "null"]},
+    "title": {"type": "string"},
+    "channel": {"type": "string"},
+    "published_at": {"type": ["string", "null"]},
+    "views": {"type": ["integer", "null"], "minimum": 0},
+    "channel_size": {"type": ["integer", "null"], "minimum": 0},
+    "age_days": {"type": ["integer", "null"], "minimum": 0},
+    "keywords": {"type": "array", "items": {"type": "string"}},
+    "collected_at": {"type": "string", "minLength": 1},
+    "source_trace": {"type": "object"}
+  },
+  "additionalProperties": false
+}
