@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M5 YouTube Metadata Package",
+  "type": "object",
+  "required": ["metadata_package_id", "publish_plan_id", "delivery_package_id", "video_id", "topic_id", "product", "source_package_hash", "snippet", "status", "constraints", "release_control", "final_status"],
+  "properties": {
+    "metadata_package_id": {"type": "string", "pattern": "^META-[A-Z]+-[0-9]{6}$"},
+    "publish_plan_id": {"type": "string", "pattern": "^PUBLISH-"},
+    "delivery_package_id": {"type": "string", "pattern": "^DELIVERY-"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-"},
+    "topic_id": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "source_package_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "snippet": {
+      "type": "object",
+      "required": ["title", "description", "tags", "categoryId", "defaultLanguage"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[^<>]*$"},
+        "description": {"type": "string", "pattern": "^[^<>]*$"},
+        "tags": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "categoryId": {"type": "string", "minLength": 1},
+        "defaultLanguage": {"type": "string", "minLength": 2}
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "required": ["privacyStatus", "selfDeclaredMadeForKids", "containsSyntheticMedia"],
+      "properties": {
+        "privacyStatus": {"const": "private"},
+        "selfDeclaredMadeForKids": {"type": "boolean"},
+        "containsSyntheticMedia": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "constraints": {
+      "type": "object",
+      "required": ["title_chars", "description_utf8_bytes", "tags_accounted_chars"],
+      "properties": {
+        "title_chars": {"type": "integer", "minimum": 1, "maximum": 100},
+        "description_utf8_bytes": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "tags_accounted_chars": {"type": "integer", "minimum": 0, "maximum": 500}
+      },
+      "additionalProperties": false
+    },
+    "release_control": {
+      "type": "object",
+      "required": ["visibility_intent", "public_release_allowed"],
+      "properties": {
+        "visibility_intent": {"const": "private_first"},
+        "public_release_allowed": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "final_status": {"const": "METADATA_READY"}
+  },
+  "additionalProperties": false
+}
