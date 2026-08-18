@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlencode, urlparse
 
+from jsonschema import validate
+
+ROOT = Path(__file__).resolve().parents[1]
 UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/youtube/v3/videos"
 
 
@@ -24,6 +27,10 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return "sha256:" + digest.hexdigest()
+
+
+def _write(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def validate_upload_inputs(publish_plan: dict, metadata: dict) -> Path:
@@ -195,3 +202,34 @@ def run_private_upload(
         "credential_trace": "oauth_access_token_from_runtime_secret" if mode == "live" else "fixture",
         "final_status": "PRIVATE_UPLOAD_COMPLETE",
     }
+
+
+def run_upload_pipeline(
+    publish_plan_path: str | Path,
+    metadata_path: str | Path,
+    run_id: str,
+    *,
+    mode: str = "fixture",
+) -> Path:
+    publish_plan = json.loads(Path(publish_plan_path).read_text(encoding="utf-8"))
+    metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
+    record = run_private_upload(publish_plan, metadata, mode=mode)
+    schema = json.loads((ROOT / "schemas" / "youtube_upload_record.schema.json").read_text(encoding="utf-8"))
+    validate(record, schema)
+
+    out = ROOT / "data" / "upload_runs" / run_id
+    out.mkdir(parents=True, exist_ok=False)
+    _write(out / "upload_record.json", record)
+    _write(
+        out / "run_summary.json",
+        {
+            "run_id": run_id,
+            "pipeline_version": "M5.3",
+            "upload_record_id": record["upload_record_id"],
+            "remote_video_id": record["remote_video_id"],
+            "visibility": record["visibility"],
+            "mode": record["mode"],
+            "final_status": record["final_status"],
+        },
+    )
+    return out
