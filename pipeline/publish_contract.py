@@ -16,13 +16,25 @@ def _write(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _underlying_delivery_package(package: dict) -> dict:
+    """Return the immutable M4 package subject without M5 approval envelope fields."""
+    subject = copy.deepcopy(package)
+    subject.pop("delivery_approval", None)
+    subject["final_status"] = "AWAITING_DELIVERY_APPROVAL"
+    return subject
+
+
+def _underlying_package_fingerprint(package: dict) -> str:
+    return delivery_package_fingerprint(_underlying_delivery_package(package))
+
+
 def attach_delivery_approval(package: dict, approval: dict) -> dict:
     if package.get("final_status") != "AWAITING_DELIVERY_APPROVAL":
         raise ValueError("M5.1 requires AWAITING_DELIVERY_APPROVAL")
     if package.get("delivery_state") != "prepared_not_delivered":
         raise ValueError("M5.1 requires an undelivered M4 package")
 
-    expected = delivery_package_fingerprint(package)
+    expected = _underlying_package_fingerprint(package)
     if package.get("package_hash") != expected:
         raise ValueError("M5.1 delivery package hash is stale or invalid")
     if not isinstance(approval, dict) or approval.get("decision") != "approved":
@@ -55,7 +67,7 @@ def build_publish_plan(approved_package: dict, *, mode: str = "dry_run") -> dict
     if not isinstance(approval, dict) or approval.get("decision") != "approved":
         raise ValueError("M5.1 requires delivery approval metadata")
 
-    expected = delivery_package_fingerprint(approved_package)
+    expected = _underlying_package_fingerprint(approved_package)
     if approved_package.get("package_hash") != expected:
         raise ValueError("M5.1 approved package changed after delivery approval")
     if approval.get("package_hash") != expected:
