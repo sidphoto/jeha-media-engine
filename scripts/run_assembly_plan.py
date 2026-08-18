@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from pipeline.assembly import run_assembly_pipeline
+from pipeline.security import validate_run_id
 
 
 def main() -> None:
@@ -12,7 +13,7 @@ def main() -> None:
     parser.add_argument("asset_bundle")
     parser.add_argument("production_spec")
     parser.add_argument("approval")
-    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--run-id", required=True, type=validate_run_id)
     parser.add_argument("--mode", choices=["dry_run", "production"], required=True)
     args = parser.parse_args()
     out = run_assembly_pipeline(
