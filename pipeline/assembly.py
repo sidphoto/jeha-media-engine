@@ -11,6 +11,7 @@ from jsonschema import validate
 from pipeline.providers import sequence_from_topic_id
 
 ROOT = Path(__file__).resolve().parents[1]
+ASSEMBLY_MODES = {"dry_run", "production"}
 
 
 def _canonical(value: object) -> bytes:
@@ -33,10 +34,19 @@ def asset_bundle_fingerprint(bundle: dict) -> str:
     return "sha256:" + hashlib.sha256(_canonical(subject)).hexdigest()
 
 
+def _validate_m3_gate_state(bundle: dict) -> None:
+    if bundle.get("passed") is not True or bundle.get("final_status") not in {"AWAITING_APPROVAL", "APPROVED"}:
+        raise ValueError("M4 requires a passed M3 bundle at the human approval boundary")
+    qa = bundle.get("qa")
+    if not isinstance(qa, list) or not qa or any(item.get("passed") is not True for item in qa):
+        raise ValueError("M4 requires every M3 QA result to pass")
+
+
 def attach_approval(bundle: dict, approval: dict) -> dict:
     """Attach an externally supplied human approval record after validating its binding."""
-    if bundle.get("passed") is not True or bundle.get("final_status") != "AWAITING_APPROVAL":
-        raise ValueError("Only a passed M3 bundle at AWAITING_APPROVAL may be approved")
+    _validate_m3_gate_state(bundle)
+    if bundle.get("final_status") != "AWAITING_APPROVAL":
+        raise ValueError("Only an M3 bundle at AWAITING_APPROVAL may receive new approval")
     if not isinstance(approval, dict) or approval.get("decision") != "approved":
         raise ValueError("approval decision must be approved")
     for field in ("approver", "approved_at", "asset_bundle_hash"):
@@ -72,12 +82,15 @@ def _product_namespace(product: str) -> str:
     return product.removesuffix("_room").upper()
 
 
-def build_render_plan(bundle: dict, production_spec: dict) -> dict:
+def build_render_plan(bundle: dict, production_spec: dict, *, assembly_mode: str = "dry_run") -> dict:
     """Build deterministic M4 render lineage only from an explicitly approved M3 bundle."""
+    if assembly_mode not in ASSEMBLY_MODES:
+        raise ValueError("assembly_mode must be dry_run or production")
     if bundle.get("final_status") != "APPROVED":
         raise ValueError("M4 requires an APPROVED M3 asset bundle")
-    if bundle.get("passed") is not True:
-        raise ValueError("M4 requires a passed M3 asset bundle")
+    _validate_m3_gate_state(bundle)
+    if assembly_mode == "production" and bundle.get("mode") != "live":
+        raise ValueError("M4 production assembly requires an M3 live asset bundle")
 
     approval = bundle.get("approval")
     if not isinstance(approval, dict) or approval.get("decision") != "approved":
@@ -120,6 +133,8 @@ def build_render_plan(bundle: dict, production_spec: dict) -> dict:
         "video_id": f"VIDEO-{namespace}-{sequence:06d}",
         "topic_id": topic_id,
         "product": product,
+        "assembly_mode": assembly_mode,
+        "source_asset_mode": bundle.get("mode"),
         "source_bundle_hash": current_hash,
         "approval": copy.deepcopy(approval),
         "lineage": {
@@ -143,13 +158,14 @@ def run_assembly_pipeline(
     production_spec_path: str | Path,
     approval_path: str | Path,
     run_id: str,
+    assembly_mode: str = "dry_run",
 ) -> Path:
     """Consume external approval and persist the deterministic M4.1 render plan."""
     bundle = json.loads(Path(asset_bundle_path).read_text(encoding="utf-8"))
     production_spec = json.loads(Path(production_spec_path).read_text(encoding="utf-8"))
     approval = json.loads(Path(approval_path).read_text(encoding="utf-8"))
     approved = attach_approval(bundle, approval)
-    plan = build_render_plan(approved, production_spec)
+    plan = build_render_plan(approved, production_spec, assembly_mode=assembly_mode)
 
     schema = json.loads((ROOT / "schemas" / "render_plan.schema.json").read_text(encoding="utf-8"))
     validate(plan, schema)
@@ -163,6 +179,8 @@ def run_assembly_pipeline(
         {
             "run_id": run_id,
             "pipeline_version": "M4.1",
+            "assembly_mode": plan["assembly_mode"],
+            "source_asset_mode": plan["source_asset_mode"],
             "render_plan_id": plan["render_plan_id"],
             "video_id": plan["video_id"],
             "source_bundle_hash": plan["source_bundle_hash"],
