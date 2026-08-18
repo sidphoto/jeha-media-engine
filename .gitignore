@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local environment / credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+client_secret*.json
+google-oauth-token.json
+*oauth*token*.json
+
+# JEHA generated runtime data
+/data/cache/
+/data/runs/
+/data/asset_runs/
+/data/render_runs/
+/data/audio_runs/
+/data/visual_runs/
+/data/video_runs/
+/data/publish_runs/
+/data/metadata_runs/
+/data/upload_runs/
+/data/release_control_runs/
+/data/release_runs/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
