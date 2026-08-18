@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M5 Publish Plan",
+  "type": "object",
+  "required": [
+    "publish_plan_id",
+    "delivery_package_id",
+    "video_id",
+    "topic_id",
+    "product",
+    "source_package_hash",
+    "delivery_approval",
+    "lineage",
+    "master",
+    "publish_intent",
+    "mode",
+    "final_status"
+  ],
+  "properties": {
+    "publish_plan_id": {"type": "string", "pattern": "^PUBLISH-[A-Z]+-[0-9]{6}$"},
+    "delivery_package_id": {"type": "string", "pattern": "^DELIVERY-[A-Z]+-[0-9]{6}$"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
+    "topic_id": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "source_package_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "delivery_approval": {
+      "type": "object",
+      "required": ["decision", "approver", "approved_at", "package_hash"],
+      "properties": {
+        "decision": {"const": "approved"},
+        "approver": {"type": "string", "minLength": 1},
+        "approved_at": {"type": "string", "minLength": 1},
+        "package_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "lineage": {"type": "object"},
+    "master": {"type": "object"},
+    "publish_intent": {
+      "type": "object",
+      "required": ["platform", "visibility", "upload_allowed", "public_release_allowed"],
+      "properties": {
+        "platform": {"const": "youtube"},
+        "visibility": {"const": "private_first"},
+        "upload_allowed": {"const": false},
+        "public_release_allowed": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "mode": {"const": "dry_run"},
+    "final_status": {"const": "PUBLISH_PLAN_READY"}
+  },
+  "additionalProperties": false
+}
