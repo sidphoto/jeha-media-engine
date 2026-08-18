@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from pipeline.assets import AssetRegistry
+from pipeline.elevenlabs_music import ElevenLabsMusicProvider
 from pipeline.providers import (
     AssetRequest,
     FixtureMusicProvider,
@@ -111,7 +112,7 @@ def generate_asset_bundle(
         sfx_provider = FixtureSFXProvider()
     elif mode == "live":
         selected = providers or {}
-        music_provider = selected.get("music", UnconfiguredLiveProvider("music"))
+        music_provider = selected.get("music", ElevenLabsMusicProvider())
         visual_provider = selected.get("visual", UnconfiguredLiveProvider("visual"))
         sfx_provider = selected.get("sfx", UnconfiguredLiveProvider("sfx"))
     else:
