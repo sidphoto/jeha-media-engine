@@ -1,0 +1,68 @@
+name: M4 FFmpeg Smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ffmpeg-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install FFmpeg tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install package
+        run: python -m pip install -e ".[dev]"
+
+      - name: Verify FFmpeg tools
+        run: |
+          set -o pipefail
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+
+      - name: Build local synthetic production fixture
+        run: python scripts/create_m4_ffmpeg_smoke_fixture.py
+
+      - name: Execute M4.4 short render
+        run: >-
+          python scripts/run_ffmpeg_render.py
+          data/ci_ffmpeg_smoke/render_plan.json
+          data/ci_ffmpeg_smoke/audio_plan.json
+          data/ci_ffmpeg_smoke/visual_plan.json
+          data/ci_ffmpeg_smoke/approved_bundle.json
+          --run-id ci-m4-ffmpeg
+
+      - name: Verify master QA and lineage
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("data/video_runs/ci-m4-ffmpeg")
+          record = json.loads((root / "master_record.json").read_text())
+          qa = json.loads((root / "qa_report.json").read_text())
+          summary = json.loads((root / "run_summary.json").read_text())
+          master = Path(record["artifact_path"])
+          assert master.is_file() and master.stat().st_size > 0
+          assert record["final_status"] == "MASTER_QA_PASSED", record
+          assert qa["passed"] is True, qa
+          assert record["technical"]["video_codec"] == "h264", record
+          assert record["technical"]["audio_codec"] == "aac", record
+          assert record["technical"]["width"] == 1920, record
+          assert record["technical"]["height"] == 1080, record
+          assert abs(record["technical"]["fps"] - 30.0) <= 0.05, record
+          assert record["content_hash"].startswith("sha256:"), record
+          assert summary["final_status"] == "MASTER_QA_PASSED", summary
+          print("M4.4 synthetic FFmpeg render verified")
+          PY

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M4.4 Video Master",
+  "type": "object",
+  "required": ["video_id", "render_plan_id", "audio_plan_id", "visual_plan_id", "topic_id", "product", "source_bundle_hash", "artifact_path", "content_hash", "technical", "qa", "final_status"],
+  "properties": {
+    "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
+    "render_plan_id": {"type": "string", "pattern": "^RENDER-[A-Z]+-[0-9]{6}$"},
+    "audio_plan_id": {"type": "string", "pattern": "^AUDIO-[A-Z]+-[0-9]{6}$"},
+    "visual_plan_id": {"type": "string", "pattern": "^VISPLAN-[A-Z]+-[0-9]{6}$"},
+    "topic_id": {"type": "string", "minLength": 1},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "source_bundle_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact_path": {"type": "string", "minLength": 1},
+    "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "technical": {
+      "type": "object",
+      "required": ["container", "video_codec", "audio_codec", "width", "height", "fps", "duration_seconds"],
+      "properties": {
+        "container": {"const": "mp4"},
+        "video_codec": {"const": "h264"},
+        "audio_codec": {"const": "aac"},
+        "width": {"const": 1920},
+        "height": {"const": 1080},
+        "fps": {"type": "number", "minimum": 29.95, "maximum": 30.05},
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "qa": {
+      "type": "object",
+      "required": ["passed", "checks", "duration_seconds", "fps", "video_codec", "audio_codec", "width", "height"],
+      "properties": {
+        "passed": {"const": true},
+        "checks": {
+          "type": "object",
+          "required": ["file_present", "h264_video", "aac_audio", "resolution_1080p", "fps_30", "duration_match"],
+          "properties": {
+            "file_present": {"const": true},
+            "h264_video": {"const": true},
+            "aac_audio": {"const": true},
+            "resolution_1080p": {"const": true},
+            "fps_30": {"const": true},
+            "duration_match": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "fps": {"type": "number", "minimum": 29.95, "maximum": 30.05},
+        "video_codec": {"const": "h264"},
+        "audio_codec": {"const": "aac"},
+        "width": {"const": 1920},
+        "height": {"const": 1080}
+      },
+      "additionalProperties": false
+    },
+    "final_status": {"const": "MASTER_QA_PASSED"}
+  },
+  "additionalProperties": false
+}
