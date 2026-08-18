@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pipeline.assets import AssetRegistry
 from pipeline.elevenlabs_music import ElevenLabsMusicProvider
+from pipeline.gemini_visual import GeminiVisualProvider
 from pipeline.providers import (
     AssetRequest,
     FixtureMusicProvider,
@@ -15,6 +16,7 @@ from pipeline.providers import (
     UnconfiguredLiveProvider,
 )
 from pipeline.sfx_library import LocalSFXLibraryProvider
+from pipeline.visual_qa import validate_visual_lineage
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -87,6 +89,7 @@ def _technical_metadata_valid(record: dict) -> bool:
 
 def _qa_record(record: dict, *, live_mode: bool) -> dict:
     rights = record.get("rights", {})
+    visual_lineage_issues = validate_visual_lineage(record) if record.get("asset_type") == "visual" else []
     checks = {
         "id_present": bool(record.get("asset_id")),
         "topic_lineage": bool(record.get("topic_id") and record.get("production_spec_ref")),
@@ -95,10 +98,14 @@ def _qa_record(record: dict, *, live_mode: bool) -> dict:
         "commercial_use": rights.get("commercial_use") is True,
         "content_hash": str(record.get("content_hash", "")).startswith("sha256:"),
         "technical_metadata": _technical_metadata_valid(record),
+        "visual_house_style_lineage": not visual_lineage_issues,
         "no_fixture_in_live": not (live_mode and record.get("provider") == "jeha_fixture"),
     }
     passed = all(checks.values())
-    return {"asset_id": record["asset_id"], "passed": passed, "checks": checks}
+    result = {"asset_id": record["asset_id"], "passed": passed, "checks": checks}
+    if visual_lineage_issues:
+        result["visual_lineage_issues"] = visual_lineage_issues
+    return result
 
 
 def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple[object, object, object]:
@@ -117,8 +124,11 @@ def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple
     if "visual" in selected:
         visual_provider = selected["visual"]
     else:
-        visual_provider = UnconfiguredLiveProvider("visual")
-        errors.append("Live visual provider is not configured")
+        visual_provider = GeminiVisualProvider()
+        if not visual_provider.api_key:
+            errors.append("GEMINI_API_KEY is required for live Gemini visual generation")
+        if not visual_provider.commercial_use_ack:
+            errors.append("GEMINI_COMMERCIAL_USE_ACK=true is required after commercial-use review")
 
     if "sfx" in selected:
         sfx_provider = selected["sfx"]
