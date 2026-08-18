@@ -114,9 +114,22 @@ data/asset_runs/m3-demo/
 
 Asset records include TOPIC lineage, provider/model/version, prompt/source, SHA-256 content hash, rights/license metadata, technical metadata, and QA status. Fixture asset IDs derive their six-digit sequence from TOPIC lineage so separate topics do not collapse onto the same identity.
 
-Live mode intentionally fails until production providers, credentials, and commercial-use rights policies are explicitly configured. It never silently falls back to fixture generation.
+### ElevenLabs Music live provider
 
-Candidate production integrations are expected to be configured through environment variables or GitHub Secrets; credentials must not be committed to the repository.
+JEHA's selected production music provider is **ElevenLabs Music**, using `music_v2` by default. One M3 generation is capped at 10 minutes; M4 is responsible for extending/arranging the master into long-form companion programs.
+
+Live music generation is deliberately gated:
+
+```bash
+export ELEVENLABS_API_KEY="..."
+export ELEVENLABS_COMMERCIAL_USE_ACK="true"
+```
+
+`ELEVENLABS_API_KEY` must come from environment variables or GitHub Secrets and is never written to Asset Registry metadata. `ELEVENLABS_COMMERCIAL_USE_ACK=true` is an explicit human acknowledgement that the applicable ElevenLabs plan/terms have been reviewed for the intended commercial use.
+
+The adapter generates instrumental music, records provider/model/song ID when available, writes the generated master artifact, hashes the actual audio bytes, and preserves the requested program duration separately from the generated master duration.
+
+Visual and SFX live providers remain separately gated. Live mode never silently falls back to fixture generation.
 
 ## Tests
 
@@ -124,7 +137,7 @@ Candidate production integrations are expected to be configured through environm
 pytest -q
 ```
 
-CI verifies M1, M2, and M3 fixture smoke paths and requires successful pipeline stages to remain:
+CI verifies M1, M2, and M3 fixture smoke paths plus network-free live-provider contracts and requires successful pipeline stages to remain:
 
 ```json
 {"final_status": "AWAITING_APPROVAL"}
@@ -132,7 +145,7 @@ CI verifies M1, M2, and M3 fixture smoke paths and requires successful pipeline 
 
 ## Current boundaries
 
-M3 fixture mode produces metadata-only deterministic assets for contract and orchestration testing. Production music/image/SFX generation, FFmpeg rendering, YouTube upload/public publishing, and the M6 analytics feedback loop remain outside the current automated boundary. Live asset providers stay blocked until provider selection, credentials, and commercial-use rights are approved.
+M3 fixture mode is deterministic and CI-safe. ElevenLabs Music is selected and its live adapter contract is implemented, but an actual paid live API smoke test still requires `ELEVENLABS_API_KEY` and commercial-use acknowledgement. Visual/SFX production integrations, FFmpeg rendering, YouTube upload/public publishing, and the M6 analytics feedback loop remain outside the current automated boundary.
 
 ## Project principle
 
