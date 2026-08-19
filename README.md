@@ -114,20 +114,56 @@ data/asset_runs/m3-demo/
 
 Asset records include TOPIC lineage, provider/model/version, prompt/source, SHA-256 content hash, rights/license metadata, technical metadata, and QA status. Fixture asset IDs derive their six-digit sequence from TOPIC lineage so separate topics do not collapse onto the same identity.
 
-### ElevenLabs Music live provider
+### Gemini Web Music live provider (default)
 
-JEHA's selected production music provider is **ElevenLabs Music**, using `music_v2` by default. One M3 generation is capped at 10 minutes; M4 is responsible for extending/arranging the master into long-form companion programs.
+JEHA's default production music provider is now **Gemini web Music**. It is a
+two-stage browser handoff, not a hidden API call from repository code:
 
-Live music generation is deliberately gated:
-
-```bash
-export ELEVENLABS_API_KEY="..."
-export ELEVENLABS_COMMERCIAL_USE_ACK="true"
+```text
+M3 live preflight
+  -> music_handoff.json (deterministic prompt + prompt_hash)
+  -> Gemini web browser skill
+  -> audio-only MP3 download
+  -> local file/hash/ffprobe verification
+  -> M3 asset attach
 ```
 
-`ELEVENLABS_API_KEY` must come from environment variables or GitHub Secrets and is never written to Asset Registry metadata. `ELEVENLABS_COMMERCIAL_USE_ACK=true` is an explicit human acknowledgement that the applicable ElevenLabs plan/terms have been reviewed for the intended commercial use.
+The first stage creates the handoff and does not require a Gemini API key:
 
-The adapter generates instrumental music, records provider/model/song ID when available, writes the generated master artifact, hashes the actual audio bytes, and preserves the requested program duration separately from the generated master duration.
+```bash
+export JEHA_MUSIC_PROVIDER="gemini_web"
+python3 scripts/run_asset_pipeline.py \
+  data/runs/m2-demo/production_spec.json \
+  --run-id m3-gemini-handoff \
+  --mode live
+```
+
+The resulting `data/asset_runs/m3-gemini-handoff/music_handoff.json` is the
+exact prompt input for the `gemini-web-music-generation` browser skill. After
+the browser reports a completed audio-only MP3 download, attach it in a new
+live run with the exact model label shown by the live picker:
+
+```bash
+export JEHA_MUSIC_PROVIDER="gemini_web"
+export JEHA_GEMINI_WEB_MUSIC_ARTIFACT="/absolute/path/to/downloaded.mp3"
+export JEHA_GEMINI_WEB_MUSIC_MODEL="3.7 Flash"
+export JEHA_GEMINI_WEB_MUSIC_HANDOFF="data/asset_runs/m3-gemini-handoff/music_handoff.json"
+export JEHA_GEMINI_WEB_MUSIC_COMMERCIAL_USE_ACK="true"
+python3 scripts/run_asset_pipeline.py \
+  data/runs/m2-demo/production_spec.json \
+  --run-id m3-gemini-assets \
+  --mode live
+```
+
+`JEHA_GEMINI_WEB_MUSIC_COMMERCIAL_USE_ACK=true` is a human gate: review the
+applicable Google/Gemini terms for the intended use before allowing the asset
+into the commercial registry. The provider copies the MP3 into the JEHA
+generated-assets directory, hashes the actual bytes, records the exact live
+model label, and refuses stale handoff prompts or conflicting overwrites.
+
+ElevenLabs remains available only as an explicit legacy fallback by setting
+`JEHA_MUSIC_PROVIDER=elevenlabs` and supplying its existing key/terms gate; it
+is no longer the default path.
 
 Visual and SFX live providers remain separately gated. Live mode never silently falls back to fixture generation.
 
@@ -145,7 +181,11 @@ CI verifies M1, M2, and M3 fixture smoke paths plus network-free live-provider c
 
 ## Current boundaries
 
-M3 fixture mode is deterministic and CI-safe. ElevenLabs Music is selected and its live adapter contract is implemented, but an actual paid live API smoke test still requires `ELEVENLABS_API_KEY` and commercial-use acknowledgement. Visual/SFX production integrations, FFmpeg rendering, YouTube upload/public publishing, and the M6 analytics feedback loop remain outside the current automated boundary.
+M3 fixture mode is deterministic and CI-safe. Gemini web Music requires an
+authenticated browser operator and a locally verified MP3; repository code
+does not persist browser cookies or session tokens. Visual/SFX production
+integrations, FFmpeg rendering, YouTube upload/public publishing, and the M6
+analytics feedback loop remain outside the current automated boundary.
 
 ## Project principle
 

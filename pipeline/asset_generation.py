@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pipeline.assets import AssetRegistry
 from pipeline.elevenlabs_music import ElevenLabsMusicProvider
+from pipeline.gemini_web_music import GeminiWebMusicProvider
 from pipeline.gemini_visual import GeminiVisualProvider
 from pipeline.providers import (
     AssetRequest,
@@ -130,11 +131,20 @@ def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple
     if "music" in selected:
         music_provider = selected["music"]
     else:
-        music_provider = ElevenLabsMusicProvider()
-        if not music_provider.api_key:
-            errors.append("ELEVENLABS_API_KEY is required for live ElevenLabs Music generation")
-        if not music_provider.commercial_use_ack:
-            errors.append("ELEVENLABS_COMMERCIAL_USE_ACK=true is required after commercial-use review")
+        music_provider_name = os.getenv("JEHA_MUSIC_PROVIDER", "gemini_web").strip().lower()
+        if music_provider_name == "gemini_web":
+            music_provider = GeminiWebMusicProvider()
+        elif music_provider_name == "elevenlabs":
+            music_provider = ElevenLabsMusicProvider()
+            if not music_provider.api_key:
+                errors.append("ELEVENLABS_API_KEY is required for explicit ElevenLabs music fallback")
+            if not music_provider.commercial_use_ack:
+                errors.append("ELEVENLABS_COMMERCIAL_USE_ACK=true is required for explicit ElevenLabs music fallback")
+        else:
+            errors.append(
+                "JEHA_MUSIC_PROVIDER must be gemini_web or elevenlabs; "
+                f"got {music_provider_name or '<empty>'}"
+            )
 
     if "visual" in selected:
         visual_provider: object | None = selected["visual"]
@@ -173,7 +183,9 @@ def generate_asset_bundle(
     providers: dict[str, object] | None = None,
 ) -> dict:
     request = build_request(spec, production_spec_ref)
+    generated: list[dict] = []
     visual_handoffs: list[dict] = []
+    music_handoff: dict | None = None
     pending_dependencies: list[str] = []
 
     if mode == "fixture":
@@ -189,7 +201,11 @@ def generate_asset_bundle(
     else:
         raise ValueError("mode must be fixture or live")
 
-    generated = [music_provider.generate(request)]
+    if isinstance(music_provider, GeminiWebMusicProvider) and music_provider.artifact_path is None:
+        music_handoff = music_provider.build_handoff(request)
+        pending_dependencies.insert(0, "music")
+    else:
+        generated.append(music_provider.generate(request))
     if visual_provider is not None:
         generated.append(visual_provider.generate(request))
     if request.sfx_type and "sfx" not in pending_dependencies:
@@ -210,7 +226,9 @@ def generate_asset_bundle(
     qa_passed = all(item["passed"] for item in qa)
     bundle_passed = required.issubset(present) and qa_passed and not pending_dependencies
 
-    if bundle_passed:
+    if music_handoff:
+        final_status = "AWAITING_GEMINI_WEB_MUSIC_GENERATION"
+    elif bundle_passed:
         final_status = "AWAITING_APPROVAL"
     elif qa_passed and visual_handoffs:
         final_status = "AWAITING_CHATGPT_VISUAL_GENERATION"
@@ -221,6 +239,7 @@ def generate_asset_bundle(
         "topic_id": spec["topic_id"],
         "mode": mode,
         "assets": registry.to_list(),
+        "music_handoff": music_handoff,
         "visual_handoffs": visual_handoffs,
         "pending_dependencies": pending_dependencies,
         "qa": qa,
@@ -237,8 +256,22 @@ def run_asset_pipeline(production_spec_path: str | Path, run_id: str, mode: str 
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "asset_bundle.json", bundle)
     _write(out / "assets.json", bundle["assets"])
+    if bundle["music_handoff"]:
+        _write(out / "music_handoff.json", bundle["music_handoff"])
     if bundle["visual_handoffs"]:
         _write(out / "visual_handoffs.json", bundle["visual_handoffs"])
     _write(out / "qa_report.json", {"topic_id": bundle["topic_id"], "checks": bundle["qa"], "passed": bundle["passed"]})
-    _write(out / "run_summary.json", {"run_id": run_id, "pipeline_version": "M3", "mode": mode, "asset_count": len(bundle["assets"]), "qa_passed": bundle["passed"], "final_status": bundle["final_status"], "pending_dependencies": bundle["pending_dependencies"]})
+    _write(
+        out / "run_summary.json",
+        {
+            "run_id": run_id,
+            "pipeline_version": "M3",
+            "mode": mode,
+            "asset_count": len(bundle["assets"]),
+            "qa_passed": bundle["passed"],
+            "final_status": bundle["final_status"],
+            "pending_dependencies": bundle["pending_dependencies"],
+            "has_music_handoff": bundle["music_handoff"] is not None,
+        },
+    )
     return out
