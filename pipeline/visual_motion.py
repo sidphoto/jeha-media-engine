@@ -8,6 +8,7 @@ from pathlib import Path
 from jsonschema import validate
 
 from pipeline.assembly import asset_bundle_fingerprint
+from pipeline.security import safe_run_dir
 from pipeline.visual_qa import STYLE_PRESET
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -177,13 +178,13 @@ def run_visual_motion_pipeline(
     approved_bundle_path: str | Path,
     run_id: str,
 ) -> Path:
+    out = safe_run_dir(ROOT, "visual_runs", run_id)
     render_plan = json.loads(Path(render_plan_path).read_text(encoding="utf-8"))
     approved_bundle = json.loads(Path(approved_bundle_path).read_text(encoding="utf-8"))
     plan = build_visual_motion_plan(render_plan, approved_bundle)
     schema = json.loads((ROOT / "schemas" / "visual_motion_plan.schema.json").read_text(encoding="utf-8"))
     validate(plan, schema)
 
-    out = ROOT / "data" / "visual_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "visual_motion_plan.json", plan)
     _write(out / "run_summary.json", {

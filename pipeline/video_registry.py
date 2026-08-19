@@ -8,6 +8,8 @@ from pathlib import Path
 
 from jsonschema import validate
 
+from pipeline.security import safe_run_dir
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -97,6 +99,7 @@ def run_video_registry(
     *,
     generated_at: str | None = None,
 ) -> Path:
+    out = safe_run_dir(ROOT, "delivery_runs", run_id)
     master_record = json.loads(Path(master_record_path).read_text(encoding="utf-8"))
     qa_report = json.loads(Path(qa_report_path).read_text(encoding="utf-8"))
     generated_at = generated_at or datetime.now(timezone.utc).isoformat()
@@ -105,7 +108,6 @@ def run_video_registry(
     schema = json.loads((ROOT / "schemas" / "delivery_package.schema.json").read_text(encoding="utf-8"))
     validate(package, schema)
 
-    out = ROOT / "data" / "delivery_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "delivery_package.json", package)
     _write(

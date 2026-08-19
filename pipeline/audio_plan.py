@@ -8,6 +8,7 @@ from pathlib import Path
 from jsonschema import validate
 
 from pipeline.assembly import asset_bundle_fingerprint
+from pipeline.security import safe_run_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -228,13 +229,12 @@ def run_audio_plan_pipeline(
     approved_bundle_path: str | Path,
     run_id: str,
 ) -> Path:
+    out = safe_run_dir(ROOT, "audio_runs", run_id)
     render_plan = json.loads(Path(render_plan_path).read_text(encoding="utf-8"))
     approved_bundle = json.loads(Path(approved_bundle_path).read_text(encoding="utf-8"))
     plan = build_audio_plan(render_plan, approved_bundle)
     schema = json.loads((ROOT / "schemas" / "audio_plan.schema.json").read_text(encoding="utf-8"))
     validate(plan, schema)
-
-    out = ROOT / "data" / "audio_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "audio_plan.json", plan)
     _write(out / "run_summary.json", {

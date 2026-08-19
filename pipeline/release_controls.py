@@ -13,6 +13,8 @@ from pathlib import Path
 
 from jsonschema import validate
 
+from pipeline.security import safe_run_dir
+
 ROOT = Path(__file__).resolve().parents[1]
 MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
 
@@ -167,6 +169,7 @@ def run_release_configuration(
     publish_at: str | None = None,
     thumbnail_path: str | Path | None = None,
 ) -> Path:
+    out = safe_run_dir(ROOT, "release_control_runs", run_id)
     upload_record = json.loads(Path(upload_record_path).read_text(encoding="utf-8"))
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     config = build_release_configuration(
@@ -179,7 +182,6 @@ def run_release_configuration(
     schema = json.loads((ROOT / "schemas" / "release_configuration.schema.json").read_text(encoding="utf-8"))
     validate(config, schema)
 
-    out = ROOT / "data" / "release_control_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "release_configuration.json", config)
     _write(

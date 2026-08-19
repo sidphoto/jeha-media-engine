@@ -7,6 +7,7 @@ from pathlib import Path
 
 from jsonschema import validate
 
+from pipeline.security import safe_run_dir
 from pipeline.video_registry import delivery_package_fingerprint
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,6 +100,7 @@ def run_publish_plan(
     approval_path: str | Path,
     run_id: str,
 ) -> Path:
+    out = safe_run_dir(ROOT, "publish_runs", run_id)
     package = json.loads(Path(delivery_package_path).read_text(encoding="utf-8"))
     approval = json.loads(Path(approval_path).read_text(encoding="utf-8"))
     approved = attach_delivery_approval(package, approval)
@@ -107,7 +109,6 @@ def run_publish_plan(
     schema = json.loads((ROOT / "schemas" / "publish_plan.schema.json").read_text(encoding="utf-8"))
     validate(plan, schema)
 
-    out = ROOT / "data" / "publish_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "approved_delivery_package.json", approved)
     _write(out / "publish_plan.json", plan)

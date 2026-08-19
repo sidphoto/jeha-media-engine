@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from pipeline.audio_plan import run_audio_plan_pipeline
+from pipeline.security import load_json_validated, validate_run_id
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
@@ -11,8 +15,13 @@ def main() -> None:
     )
     parser.add_argument("render_plan")
     parser.add_argument("approved_asset_bundle")
-    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--run-id", required=True, type=validate_run_id)
     args = parser.parse_args()
+    load_json_validated(
+        args.render_plan,
+        ROOT / "schemas" / "render_plan.schema.json",
+        label="M4.2 render plan",
+    )
     out = run_audio_plan_pipeline(
         args.render_plan,
         args.approved_asset_bundle,

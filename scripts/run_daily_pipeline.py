@@ -17,6 +17,7 @@ from pipeline.qa import build_qa_report
 from pipeline.research import generate_candidates
 from pipeline.router import load_products, route_top_candidates
 from pipeline.score import load_scoring_config, rank_candidates
+from pipeline.security import safe_run_dir, validate_run_id
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -28,6 +29,7 @@ def load_json(path: Path) -> dict:
 
 
 def run_pipeline(run_id: str) -> Path:
+    output_dir = safe_run_dir(ROOT, "runs", run_id)
     scoring = load_scoring_config(ROOT / "config" / "scoring.yaml")
     products = load_products(ROOT / "config" / "products.yaml")
 
@@ -55,7 +57,6 @@ def run_pipeline(run_id: str) -> Path:
         schema=load_json(ROOT / "schemas" / "qa_report.schema.json"),
     )
 
-    output_dir = ROOT / "data" / "runs" / run_id
     output_dir.mkdir(parents=True, exist_ok=False)
 
     write_json(output_dir / "candidates.json", ranked)
@@ -81,6 +82,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--run-id",
+        type=validate_run_id,
         default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         help="Output run id. Use a fixed value for reproducibility checks.",
     )

@@ -21,6 +21,7 @@ from pipeline.score import load_scoring_config, rank_candidates
 from pipeline.router import load_products, route_top_candidates
 from pipeline.planner import build_production_spec
 from pipeline.qa import build_qa_report
+from pipeline.security import safe_run_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,6 +91,10 @@ def collect_benchmark(config: dict, mode: str) -> tuple[list[dict], dict[str, di
 
 
 def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
+    # Validate the run id before doing collector work so a malicious CLI argument fails
+    # before any filesystem writes or live network calls are attempted.
+    out = safe_run_dir(ROOT, "runs", run_id)
+
     config = load_intelligence_config()
     scoring = load_scoring_config(ROOT / "config" / "scoring.yaml")
     products = load_products(ROOT / "config" / "products.yaml")
@@ -117,7 +122,6 @@ def run_intelligence_pipeline(run_id: str, mode: str = "fixture") -> Path:
     validate(production_spec, json.loads((ROOT / "schemas" / "production_spec.schema.json").read_text()))
     validate(qa_report, json.loads((ROOT / "schemas" / "qa_report.schema.json").read_text()))
 
-    out = ROOT / "data" / "runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "raw_evidence.json", evidence)
     _write(out / "youtube_benchmark.json", benchmark_rows)
