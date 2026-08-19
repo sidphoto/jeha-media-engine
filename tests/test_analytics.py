@@ -121,6 +121,25 @@ def test_source_structure_is_runtime_validated():
         validate_observation(broken)
 
 
+def test_runtime_validator_rejects_final_status_and_extra_raw_metrics():
+    value = fixture_observation(product="flow_room", sequence=1, window_start="2026-08-01T00:00:00+08:00", window_end="2026-08-08T00:00:00+08:00")
+
+    broken = copy.deepcopy(value)
+    broken["final_status"] = "READY"
+    with pytest.raises(ValueError, match="final_status"):
+        validate_observation(broken)
+
+    broken = copy.deepcopy(value)
+    del broken["final_status"]
+    with pytest.raises(ValueError, match="missing final_status"):
+        validate_observation(broken)
+
+    broken = copy.deepcopy(value)
+    broken["metrics"]["unexpectedRawMetric"] = 1
+    with pytest.raises(ValueError, match="canonical raw metric fields"):
+        validate_observation(broken)
+
+
 def test_derived_scores_cannot_duplicate_raw_metric_fields():
     value = fixture_observation(product="flow_room", sequence=1, window_start="2026-08-01T00:00:00+08:00", window_end="2026-08-08T00:00:00+08:00")
     broken = copy.deepcopy(value)
