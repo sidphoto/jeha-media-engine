@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from jsonschema import validate
+from jsonschema import ValidationError, validate
 
 from pipeline.visual_candidates import attach_generated_result, build_candidate_handoffs
 from pipeline.visual_prompts import build_three_candidate_prompts
@@ -65,6 +65,7 @@ def test_handoffs_validate_against_schema():
 
 
 def test_generated_result_binds_exact_prompt_lineage():
+    schema = json.loads((ROOT / "schemas" / "visual_candidate.schema.json").read_text(encoding="utf-8"))
     handoff = build_candidate_handoffs(
         topic_id="TOPIC-NATURE-000001",
         production_spec_ref="SPEC-NATURE-000001",
@@ -78,8 +79,59 @@ def test_generated_result_binds_exact_prompt_lineage():
         artifact_path="data/generated_assets/visual/example.png",
         content_hash="sha256:" + "a" * 64,
     )
+    validate(ready, schema)
     assert ready["prompt_hash"] == handoff["prompt_hash"]
     assert ready["final_status"] == "VISUAL_CANDIDATE_READY_FOR_QA"
+
+
+def test_generated_result_rejects_stale_prompt_lineage_and_malformed_hash():
+    handoff = build_candidate_handoffs(
+        topic_id="TOPIC-NATURE-000002",
+        production_spec_ref="SPEC-NATURE-000002",
+        product="nature_room",
+        scene="misty forest stream",
+        lighting="soft morning rays through mist",
+        mood="restorative spacious calm",
+    )[0]
+    tampered = dict(handoff)
+    tampered["prompt"] += " Add a dramatic neon sign."
+    with pytest.raises(ValueError, match="stale|mutated"):
+        attach_generated_result(
+            tampered,
+            artifact_path="data/generated_assets/visual/tampered.png",
+            content_hash="sha256:" + "b" * 64,
+        )
+
+    with pytest.raises(ValueError, match="full sha256"):
+        attach_generated_result(
+            handoff,
+            artifact_path="data/generated_assets/visual/example.png",
+            content_hash="sha256:abc",
+        )
+
+
+def test_schema_requires_artifact_evidence_only_when_candidate_is_qa_ready():
+    schema = json.loads((ROOT / "schemas" / "visual_candidate.schema.json").read_text(encoding="utf-8"))
+    handoff = build_candidate_handoffs(
+        topic_id="TOPIC-FLOW-000002",
+        production_spec_ref="SPEC-FLOW-000002",
+        product="flow_room",
+        scene="quiet focus desk",
+        lighting="soft warm task light",
+        mood="calm focus",
+    )[0]
+    validate(handoff, schema)
+
+    fake_ready = dict(handoff)
+    fake_ready["final_status"] = "VISUAL_CANDIDATE_READY_FOR_QA"
+    with pytest.raises(ValidationError):
+        validate(fake_ready, schema)
+
+    awaiting_with_artifact = dict(handoff)
+    awaiting_with_artifact["artifact_path"] = "data/generated_assets/visual/premature.png"
+    awaiting_with_artifact["content_hash"] = "sha256:" + "c" * 64
+    with pytest.raises(ValidationError):
+        validate(awaiting_with_artifact, schema)
 
 
 def test_visual_qa_rejects_non_finite_score_and_pseudo_text():
