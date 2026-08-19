@@ -45,5 +45,28 @@
       "enum": ["AWAITING_CHATGPT_IMAGE_GENERATION", "VISUAL_CANDIDATE_READY_FOR_QA"]
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"final_status": {"const": "VISUAL_CANDIDATE_READY_FOR_QA"}},
+        "required": ["final_status"]
+      },
+      "then": {"required": ["artifact_path", "content_hash"]}
+    },
+    {
+      "if": {
+        "properties": {"final_status": {"const": "AWAITING_CHATGPT_IMAGE_GENERATION"}},
+        "required": ["final_status"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["artifact_path"]},
+            {"required": ["content_hash"]}
+          ]
+        }
+      }
+    }
+  ],
   "additionalProperties": false
 }
