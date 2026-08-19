@@ -3,13 +3,35 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 from pipeline.visual_prompts import build_three_candidate_prompts
+
+_SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PROMPT_HASH_FIELDS = (
+    "topic_id",
+    "production_spec_ref",
+    "product",
+    "candidate_role",
+    "parent_style",
+    "style_preset",
+    "aspect_ratio",
+    "prompt",
+)
 
 
 def _stable_hash(value: dict) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _prompt_lineage_hash(record: dict) -> str:
+    """Recompute the canonical hash over every field bound by the handoff contract."""
+    try:
+        payload = {field: record[field] for field in _PROMPT_HASH_FIELDS}
+    except KeyError as exc:
+        raise ValueError(f"visual handoff is missing hash-bound field: {exc.args[0]}") from exc
+    return _stable_hash(payload)
 
 
 def build_candidate_handoffs(
@@ -45,16 +67,7 @@ def build_candidate_handoffs(
             "remote_execution_allowed": False,
             "final_status": "AWAITING_CHATGPT_IMAGE_GENERATION",
         }
-        payload["prompt_hash"] = _stable_hash({
-            "topic_id": topic_id,
-            "production_spec_ref": production_spec_ref,
-            "product": product,
-            "candidate_role": prompt["candidate_role"],
-            "parent_style": prompt["parent_style"],
-            "style_preset": prompt["style_preset"],
-            "aspect_ratio": "16:9",
-            "prompt": prompt["prompt"],
-        })
+        payload["prompt_hash"] = _prompt_lineage_hash(payload)
         handoffs.append(payload)
 
     if [item["candidate_role"] for item in handoffs] != ["primary", "alt_a", "alt_b"]:
@@ -63,13 +76,16 @@ def build_candidate_handoffs(
 
 
 def attach_generated_result(handoff: dict, *, artifact_path: str, content_hash: str) -> dict:
-    """Bind a returned ChatGPT image artifact to the exact prompt lineage."""
+    """Bind a returned ChatGPT image artifact only to an untampered prompt lineage."""
     if handoff.get("final_status") != "AWAITING_CHATGPT_IMAGE_GENERATION":
         raise ValueError("visual handoff is not awaiting generation")
-    if not artifact_path:
+    expected_prompt_hash = _prompt_lineage_hash(handoff)
+    if handoff.get("prompt_hash") != expected_prompt_hash:
+        raise ValueError("visual handoff prompt lineage is stale or has been mutated")
+    if not isinstance(artifact_path, str) or not artifact_path.strip():
         raise ValueError("artifact_path is required")
-    if not isinstance(content_hash, str) or not content_hash.startswith("sha256:"):
-        raise ValueError("content_hash must be a sha256 digest")
+    if not isinstance(content_hash, str) or not _SHA256_RE.fullmatch(content_hash):
+        raise ValueError("content_hash must be a full sha256 digest")
     result = dict(handoff)
     result.update({
         "artifact_path": artifact_path,
