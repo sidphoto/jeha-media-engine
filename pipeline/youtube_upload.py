@@ -152,9 +152,6 @@ class YouTubeResumableTransport:
         if status not in {200, 201} or not location:
             raise RuntimeError(f"YouTube resumable session initiation failed: HTTP {status}")
 
-        # Validate the server-supplied session URL before the OAuth token is ever attached
-        # to a subsequent PUT request. The official protocol currently returns the same
-        # www.googleapis.com authority for the resumable session URI.
         validate_https_host(
             location,
             exact_hosts=YOUTUBE_UPLOAD_HOSTS,
@@ -254,6 +251,7 @@ def run_upload_pipeline(
     *,
     mode: str = "fixture",
 ) -> Path:
+    out = safe_run_dir(ROOT, "upload_runs", run_id)
     publish_plan = load_json_validated(
         publish_plan_path,
         ROOT / "schemas" / "publish_plan.schema.json",
@@ -268,7 +266,6 @@ def run_upload_pipeline(
     schema = json.loads((ROOT / "schemas" / "youtube_upload_record.schema.json").read_text(encoding="utf-8"))
     validate(record, schema)
 
-    out = safe_run_dir(ROOT, "upload_runs", run_id)
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "upload_record.json", record)
     _write(
