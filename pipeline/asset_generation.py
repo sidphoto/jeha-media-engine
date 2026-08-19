@@ -17,6 +17,7 @@ from pipeline.providers import (
 )
 from pipeline.security import safe_run_dir
 from pipeline.sfx_library import LocalSFXLibraryProvider
+from pipeline.visual_candidates import build_candidate_handoffs
 from pipeline.visual_qa import validate_visual_lineage
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,9 +110,22 @@ def _qa_record(record: dict, *, live_mode: bool) -> dict:
     return result
 
 
-def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple[object, object, object]:
-    """Resolve and preflight every live dependency before any paid/external generation."""
+def _chatgpt_visual_handoffs(request: AssetRequest) -> list[dict]:
+    """Create the canonical #54 ChatGPT-first browser handoffs for live visual generation."""
+    return build_candidate_handoffs(
+        topic_id=request.topic_id,
+        production_spec_ref=request.production_spec_ref,
+        product=request.product,
+        scene=request.visual_brief,
+        lighting="soft product-appropriate cinematic lighting with restrained contrast",
+        mood="calm low-stimulation long-form companion ambience",
+    )
+
+
+def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple[object, object | None, object, list[str]]:
+    """Resolve live providers without making ChatGPT browser handoffs depend on Gemini credentials."""
     errors: list[str] = []
+    pending: list[str] = []
 
     if "music" in selected:
         music_provider = selected["music"]
@@ -123,13 +137,16 @@ def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple
             errors.append("ELEVENLABS_COMMERCIAL_USE_ACK=true is required after commercial-use review")
 
     if "visual" in selected:
-        visual_provider = selected["visual"]
-    else:
+        visual_provider: object | None = selected["visual"]
+    elif os.getenv("JEHA_VISUAL_PROVIDER", "chatgpt").strip().lower() == "gemini":
         visual_provider = GeminiVisualProvider()
         if not visual_provider.api_key:
-            errors.append("GEMINI_API_KEY is required for live Gemini visual generation")
+            errors.append("GEMINI_API_KEY is required when JEHA_VISUAL_PROVIDER=gemini")
         if not visual_provider.commercial_use_ack:
-            errors.append("GEMINI_COMMERCIAL_USE_ACK=true is required after commercial-use review")
+            errors.append("GEMINI_COMMERCIAL_USE_ACK=true is required when JEHA_VISUAL_PROVIDER=gemini")
+    else:
+        visual_provider = None
+        pending.append("visual")
 
     if "sfx" in selected:
         sfx_provider = selected["sfx"]
@@ -139,15 +156,13 @@ def _live_providers(request: AssetRequest, selected: dict[str, object]) -> tuple
             sfx_provider = LocalSFXLibraryProvider(manifest_path=manifest)
         else:
             sfx_provider = UnconfiguredLiveProvider("sfx")
-            errors.append(
-                "JEHA_SFX_MANIFEST is required when live Production Spec requests SFX"
-            )
+            pending.append("sfx")
     else:
         sfx_provider = UnconfiguredLiveProvider("sfx")
 
     if errors:
         raise RuntimeError("Live provider preflight failed: " + "; ".join(errors))
-    return music_provider, visual_provider, sfx_provider
+    return music_provider, visual_provider, sfx_provider, pending
 
 
 def generate_asset_bundle(
@@ -158,19 +173,26 @@ def generate_asset_bundle(
     providers: dict[str, object] | None = None,
 ) -> dict:
     request = build_request(spec, production_spec_ref)
+    visual_handoffs: list[dict] = []
+    pending_dependencies: list[str] = []
+
     if mode == "fixture":
         if providers is not None:
             raise ValueError("providers may only be injected in live mode")
         music_provider = FixtureMusicProvider()
-        visual_provider = FixtureVisualProvider()
+        visual_provider: object | None = FixtureVisualProvider()
         sfx_provider = FixtureSFXProvider()
     elif mode == "live":
-        music_provider, visual_provider, sfx_provider = _live_providers(request, providers or {})
+        music_provider, visual_provider, sfx_provider, pending_dependencies = _live_providers(request, providers or {})
+        if visual_provider is None:
+            visual_handoffs = _chatgpt_visual_handoffs(request)
     else:
         raise ValueError("mode must be fixture or live")
 
-    generated = [music_provider.generate(request), visual_provider.generate(request)]
-    if request.sfx_type:
+    generated = [music_provider.generate(request)]
+    if visual_provider is not None:
+        generated.append(visual_provider.generate(request))
+    if request.sfx_type and "sfx" not in pending_dependencies:
         sfx = sfx_provider.generate(request)
         if sfx:
             generated.append(sfx)
@@ -185,14 +207,25 @@ def generate_asset_bundle(
 
     required = {"music", "visual"}
     present = {item["asset_type"] for item in registry.to_list()}
-    bundle_passed = required.issubset(present) and all(item["passed"] for item in qa)
+    qa_passed = all(item["passed"] for item in qa)
+    bundle_passed = required.issubset(present) and qa_passed and not pending_dependencies
+
+    if bundle_passed:
+        final_status = "AWAITING_APPROVAL"
+    elif qa_passed and visual_handoffs:
+        final_status = "AWAITING_CHATGPT_VISUAL_GENERATION"
+    else:
+        final_status = "FAILED"
+
     return {
         "topic_id": spec["topic_id"],
         "mode": mode,
         "assets": registry.to_list(),
+        "visual_handoffs": visual_handoffs,
+        "pending_dependencies": pending_dependencies,
         "qa": qa,
         "passed": bundle_passed,
-        "final_status": "AWAITING_APPROVAL" if bundle_passed else "FAILED",
+        "final_status": final_status,
     }
 
 
@@ -204,6 +237,8 @@ def run_asset_pipeline(production_spec_path: str | Path, run_id: str, mode: str 
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "asset_bundle.json", bundle)
     _write(out / "assets.json", bundle["assets"])
+    if bundle["visual_handoffs"]:
+        _write(out / "visual_handoffs.json", bundle["visual_handoffs"])
     _write(out / "qa_report.json", {"topic_id": bundle["topic_id"], "checks": bundle["qa"], "passed": bundle["passed"]})
-    _write(out / "run_summary.json", {"run_id": run_id, "pipeline_version": "M3", "mode": mode, "asset_count": len(bundle["assets"]), "qa_passed": bundle["passed"], "final_status": bundle["final_status"]})
+    _write(out / "run_summary.json", {"run_id": run_id, "pipeline_version": "M3", "mode": mode, "asset_count": len(bundle["assets"]), "qa_passed": bundle["passed"], "final_status": bundle["final_status"], "pending_dependencies": bundle["pending_dependencies"]})
     return out
