@@ -61,6 +61,16 @@ def validate_observation(observation: dict) -> dict:
     if len(suffixes) != 1:
         raise ValueError("analytics observation_id/video_id/topic_id must share the same run sequence")
 
+    source = observation["source"]
+    if not isinstance(source, dict):
+        raise ValueError("analytics source must be an object")
+    if set(source) != {"provider", "dataset"}:
+        raise ValueError("analytics source must contain exactly provider and dataset")
+    if source.get("provider") not in {"jeha_fixture", "youtube_analytics"}:
+        raise ValueError("analytics source has invalid provider")
+    if not isinstance(source.get("dataset"), str) or not source["dataset"].strip():
+        raise ValueError("analytics source dataset is required")
+
     start = _parse_iso(observation["window_start"])
     end = _parse_iso(observation["window_end"])
     if end <= start:
