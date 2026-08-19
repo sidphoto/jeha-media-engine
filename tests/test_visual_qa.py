@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pipeline.visual_qa import STYLE_PRESET, evaluate_visual_qa, validate_visual_lineage, visual_policy
+from pipeline.visual_qa import HARD_FAIL_KEYS, STYLE_PRESET, evaluate_visual_qa, validate_visual_lineage, visual_policy
 
 
 def assessment(score: int, **hard_fail):
@@ -34,6 +34,17 @@ def test_hard_fail_overrides_high_score():
     assert result["gate"] == "FAIL"
     assert result["production_ready"] is False
     assert result["hard_fail_reasons"] == ["pseudo_text"]
+
+
+@pytest.mark.parametrize("hard_fail_key", HARD_FAIL_KEYS)
+def test_every_hard_fail_key_overrides_high_score(hard_fail_key):
+    """Only pseudo_text was previously exercised; the other HARD_FAIL_KEYS entries
+    (watermark_or_logo, major_structural_artifact, unknown_rights, non_16_9_master,
+    production_spec_mismatch, missing_prompt_lineage) had no regression coverage."""
+    result = evaluate_visual_qa(assessment(98, **{hard_fail_key: True}))
+    assert result["gate"] == "FAIL"
+    assert result["production_ready"] is False
+    assert result["hard_fail_reasons"] == [hard_fail_key]
 
 
 def test_missing_or_invalid_component_is_rejected():
@@ -75,10 +86,10 @@ def test_visual_lineage_blocks_missing_rights_style_and_ratio():
     assert "unknown_rights" in issues
 
 
-def test_product_policy_is_explicit_and_ai_first():
+def test_product_policy_is_explicit_and_chatgpt_first():
     policy = visual_policy("nature_room")
     assert policy["style_preset"] == STYLE_PRESET
-    assert policy["source_priority"][0] == "ai_generation"
+    assert policy["source_priority"][0] == "chatgpt_image"
     assert policy["source_priority"][1] == "owned_flickr_reference"
     assert policy["source_priority"][2] == "owned_google_photos_reference"
     assert policy["source_priority"][3] == "free_commercial_stock_reference"

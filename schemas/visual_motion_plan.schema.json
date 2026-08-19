@@ -19,7 +19,7 @@
         "width": {"type": "integer", "minimum": 1},
         "height": {"type": "integer", "minimum": 1},
         "aspect_ratio": {"const": "16:9"},
-        "style_preset": {"const": "jeha_cinematic_dreamy_realism_v1"}
+        "style_preset": {"const": "jeha_cinematic_dreamy_realism_v2"}
       },
       "additionalProperties": false
     },

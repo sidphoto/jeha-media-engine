@@ -1,0 +1,37 @@
+{
+  "parent_style": {
+    "id": "jeha_cinematic_dreamy_realism_v2",
+    "description": "Calm cinematic realism with soft atmosphere, believable detail, low stimulation, elegant color harmony, and long-form companion-media suitability.",
+    "base_prompt": "Create a refined 16:9 visual in JEHA house style for long-form YouTube companion media. Keep the scene calm, immersive, emotionally soothing, visually believable, and polished. Use clean composition, elegant lighting, soft atmospheric depth, restrained contrast, natural detail, and cinematic realism with a subtle dreamy quality.",
+    "negative_guidance": "Avoid readable text, pseudo-text, letters, numbers, logos, watermarks, signatures, malformed objects, distorted architecture, duplicated objects, harsh HDR, oversharpening, excessive saturation, chaotic composition, cheap cartoon styling, and synthetic-looking artifacts."
+  },
+  "products": {
+    "flow_room": {
+      "preset": "jeha_flow_focus_v2",
+      "reference_role": "youtube_functional_composition_reference",
+      "prompt": "Create a quiet focus-oriented environment for study, coding, or deep work. Favor a clean desk or workspace, soft task lighting, rainy or atmospheric window depth when appropriate, clear visual hierarchy, and low distraction. The mood should feel focused, calm, productive, and companionable."
+    },
+    "moon_room": {
+      "preset": "jeha_moon_sleep_v2",
+      "reference_role": "moon_product_reference",
+      "prompt": "Create a peaceful night ambience for sleep and gentle listening. Favor dim moonlight or soft window light, deep but not harsh blues, subtle mist, calm reflections, restrained contrast, and a safe sleepy mood. Keep the moon and sky understated rather than spectacular or dramatic."
+    },
+    "cozy_room": {
+      "preset": "jeha_cozy_warm_v2",
+      "reference_role": "cozy_product_reference",
+      "prompt": "Create a warm, intimate reading or relaxation environment with soft lamps, natural wood and textile textures, comforting negative space, and a calm rainy or evening atmosphere when appropriate. Books and pages may be present only if no readable text is visible."
+    },
+    "nature_room": {
+      "preset": "jeha_nature_atmospheric_v2",
+      "reference_role": "house_style_reference",
+      "prompt": "Create an immersive natural environment suitable for long-form nature ambience. Favor believable forests, streams, rain, mist, ocean, or restorative landscapes with layered depth, soft natural light, calm visual rhythm, and realistic environmental detail."
+    }
+  },
+  "candidate_policy": {
+    "count": 3,
+    "roles": ["primary", "alt_a", "alt_b"],
+    "primary": "Canonical composition using the product preset.",
+    "alt_a": "Composition variant only: adjust framing, viewpoint, subject placement, or depth while preserving scene, product, and house style.",
+    "alt_b": "Atmosphere variant only: adjust weather, mist, time-of-day, warmth, coolness, or lighting intensity while preserving scene, product, and house style."
+  }
+}

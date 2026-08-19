@@ -188,7 +188,7 @@ jobs:
           assert summary["final_status"] == "VISUAL_PLAN_READY", summary
           assert plan["planned_coverage_seconds"] >= plan["target_duration_seconds"], plan
           assert plan["source_visual"]["asset_id"].startswith("VISUAL-"), plan
-          assert plan["source_visual"]["style_preset"] == "jeha_cinematic_dreamy_realism_v1", plan
+          assert plan["source_visual"]["style_preset"] == "jeha_cinematic_dreamy_realism_v2", plan
           assert plan["execution_profile"]["max_scale"] <= 1.05, plan
           phases = plan["phases"]
           assert all(a["motif"] != b["motif"] for a, b in zip(phases, phases[1:])), plan

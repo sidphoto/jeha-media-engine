@@ -64,7 +64,7 @@ def test_visual_motion_preserves_source_hash_and_house_style():
     source = next(asset for asset in approved["assets"] if asset["asset_type"] == "visual")
     plan = build_visual_motion_plan(render, approved)
     assert plan["source_visual"]["content_hash"] == source["content_hash"]
-    assert plan["source_visual"]["style_preset"] == "jeha_cinematic_dreamy_realism_v1"
+    assert plan["source_visual"]["style_preset"] == "jeha_cinematic_dreamy_realism_v2"
     assert plan["source_bundle_hash"] == render["source_bundle_hash"]
 
 
