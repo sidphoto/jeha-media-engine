@@ -100,7 +100,7 @@ def test_sfx_is_optional_when_topic_has_no_environmental_tag():
     assert bundle["final_status"] == "AWAITING_APPROVAL"
 
 
-def test_live_mode_preflight_requires_music_but_not_gemini_or_sfx(monkeypatch):
+def test_live_mode_defaults_to_gemini_web_handoff_and_does_not_require_legacy_keys(monkeypatch):
     for name in (
         "ELEVENLABS_API_KEY",
         "ELEVENLABS_COMMERCIAL_USE_ACK",
@@ -108,14 +108,35 @@ def test_live_mode_preflight_requires_music_but_not_gemini_or_sfx(monkeypatch):
         "GEMINI_COMMERCIAL_USE_ACK",
         "JEHA_SFX_MANIFEST",
         "JEHA_VISUAL_PROVIDER",
+        "JEHA_MUSIC_PROVIDER",
     ):
         monkeypatch.delenv(name, raising=False)
+    bundle = generate_asset_bundle(sample_spec(), mode="live", production_spec_ref="spec.json")
+    assert bundle["music_handoff"]["provider"] == "gemini_web"
+    assert bundle["music_handoff"]["final_status"] == "AWAITING_GEMINI_WEB_MUSIC_GENERATION"
+    assert "music" in bundle["pending_dependencies"]
+    assert "visual" in bundle["pending_dependencies"]
+    assert "sfx" in bundle["pending_dependencies"]
+    assert bundle["assets"] == []
+    assert bundle["passed"] is False
+    assert "GEMINI_API_KEY" not in repr(bundle)
+
+
+def test_explicit_elevenlabs_fallback_keeps_legacy_preflight(monkeypatch):
+    for name in (
+        "ELEVENLABS_API_KEY",
+        "ELEVENLABS_COMMERCIAL_USE_ACK",
+        "JEHA_MUSIC_PROVIDER",
+        "JEHA_VISUAL_PROVIDER",
+        "JEHA_SFX_MANIFEST",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("JEHA_MUSIC_PROVIDER", "elevenlabs")
     with pytest.raises(RuntimeError) as exc:
         generate_asset_bundle(sample_spec(), mode="live", production_spec_ref="spec.json")
     message = str(exc.value)
     assert "ELEVENLABS_API_KEY" in message
     assert "GEMINI_API_KEY" not in message
-    assert "JEHA_SFX_MANIFEST" not in message
 
 
 def test_live_default_routes_visual_to_three_chatgpt_handoffs_and_keeps_sfx_pending(monkeypatch):
