@@ -63,6 +63,8 @@ def test_fixture_bundle_is_deterministic_and_traceable():
     assert first == second
     assert first["passed"] is True
     assert first["final_status"] == "AWAITING_APPROVAL"
+    assert first["visual_handoffs"] == []
+    assert first["pending_dependencies"] == []
     assert {asset["asset_type"] for asset in first["assets"]} == {"music", "visual", "sfx"}
     assert all(asset["topic_id"] == "TOPIC-FLOW-000024" for asset in first["assets"])
     assert all(asset["production_spec_ref"] == "spec.json" for asset in first["assets"])
@@ -98,21 +100,67 @@ def test_sfx_is_optional_when_topic_has_no_environmental_tag():
     assert bundle["final_status"] == "AWAITING_APPROVAL"
 
 
-def test_live_mode_preflight_reports_missing_provider_configuration(monkeypatch):
+def test_live_mode_preflight_requires_music_but_not_gemini_or_sfx(monkeypatch):
     for name in (
         "ELEVENLABS_API_KEY",
         "ELEVENLABS_COMMERCIAL_USE_ACK",
         "GEMINI_API_KEY",
         "GEMINI_COMMERCIAL_USE_ACK",
         "JEHA_SFX_MANIFEST",
+        "JEHA_VISUAL_PROVIDER",
     ):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(RuntimeError) as exc:
         generate_asset_bundle(sample_spec(), mode="live", production_spec_ref="spec.json")
     message = str(exc.value)
     assert "ELEVENLABS_API_KEY" in message
+    assert "GEMINI_API_KEY" not in message
+    assert "JEHA_SFX_MANIFEST" not in message
+
+
+def test_live_default_routes_visual_to_three_chatgpt_handoffs_and_keeps_sfx_pending(monkeypatch):
+    monkeypatch.delenv("JEHA_VISUAL_PROVIDER", raising=False)
+    monkeypatch.delenv("JEHA_SFX_MANIFEST", raising=False)
+    bundle = generate_asset_bundle(
+        sample_spec(),
+        mode="live",
+        production_spec_ref="spec.json",
+        providers={
+            "music": LiveTestProvider(
+                "music",
+                {"duration_seconds": 10800, "format": "wav", "sample_rate": 48000, "channels": 2},
+            ),
+        },
+    )
+    assert {asset["asset_type"] for asset in bundle["assets"]} == {"music"}
+    assert len(bundle["visual_handoffs"]) == 3
+    assert [item["candidate_role"] for item in bundle["visual_handoffs"]] == ["primary", "alt_a", "alt_b"]
+    assert all(item["provider"] == "chatgpt_image" for item in bundle["visual_handoffs"])
+    assert all(item["remote_execution_allowed"] is False for item in bundle["visual_handoffs"])
+    assert bundle["pending_dependencies"] == ["visual", "sfx"]
+    assert bundle["passed"] is False
+    assert bundle["final_status"] == "AWAITING_CHATGPT_VISUAL_GENERATION"
+
+
+def test_gemini_is_explicit_opt_in_fallback(monkeypatch):
+    monkeypatch.setenv("JEHA_VISUAL_PROVIDER", "gemini")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_COMMERCIAL_USE_ACK", raising=False)
+    with pytest.raises(RuntimeError) as exc:
+        generate_asset_bundle(
+            sample_spec(["focus", "coding"]),
+            mode="live",
+            production_spec_ref="spec.json",
+            providers={
+                "music": LiveTestProvider(
+                    "music",
+                    {"duration_seconds": 10800, "format": "wav", "sample_rate": 48000, "channels": 2},
+                ),
+            },
+        )
+    message = str(exc.value)
+    assert "JEHA_VISUAL_PROVIDER=gemini" in message
     assert "GEMINI_API_KEY" in message
-    assert "JEHA_SFX_MANIFEST" in message
 
 
 def test_live_provider_contract_can_be_injected_without_orchestration_changes():
@@ -130,6 +178,7 @@ def test_live_provider_contract_can_be_injected_without_orchestration_changes():
     )
     assert bundle["passed"] is True
     assert bundle["final_status"] == "AWAITING_APPROVAL"
+    assert bundle["visual_handoffs"] == []
     assert all(asset["provider"] == "live_test_provider" for asset in bundle["assets"])
 
 
