@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from pipeline.asset_generation import generate_asset_bundle
 from pipeline.assets import build_fixture_asset
 from pipeline.visual_qa import STYLE_PRESET
@@ -66,15 +64,18 @@ def live_core_providers():
     }
 
 
-def test_live_sfx_requires_manifest_when_requested(monkeypatch):
+def test_live_sfx_is_pending_when_manifest_is_missing(monkeypatch):
     monkeypatch.delenv("JEHA_SFX_MANIFEST", raising=False)
-    with pytest.raises(RuntimeError, match="JEHA_SFX_MANIFEST"):
-        generate_asset_bundle(
-            spec(),
-            mode="live",
-            production_spec_ref="spec.json",
-            providers=live_core_providers(),
-        )
+    bundle = generate_asset_bundle(
+        spec(),
+        mode="live",
+        production_spec_ref="spec.json",
+        providers=live_core_providers(),
+    )
+    assert bundle["passed"] is False
+    assert bundle["pending_dependencies"] == ["sfx"]
+    assert bundle["final_status"] == "FAILED"
+    assert {asset["asset_type"] for asset in bundle["assets"]} == {"music", "visual"}
 
 
 def test_live_sfx_uses_license_reviewed_manifest(tmp_path, monkeypatch):
