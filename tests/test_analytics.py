@@ -51,8 +51,6 @@ def test_duplicate_observation_ids_fail():
 
 
 def test_sequence_rejects_bool_even_though_bool_is_an_int_subclass():
-    # isinstance(True, int) is True in Python, so a naive `isinstance(sequence, int)`
-    # check would silently accept sequence=True as sequence=1.
     with pytest.raises(ValueError, match="positive integer"):
         fixture_observation(product="flow_room", sequence=True, window_start="2026-08-01T00:00:00+08:00", window_end="2026-08-08T00:00:00+08:00")
 
@@ -97,6 +95,30 @@ def test_mismatched_video_topic_or_product_lineage_is_rejected():
     wrong_sequence["video_id"] = "VIDEO-FLOW-000002"
     with pytest.raises(ValueError, match="run sequence"):
         validate_observation(wrong_sequence)
+
+
+def test_source_structure_is_runtime_validated():
+    value = fixture_observation(product="flow_room", sequence=1, window_start="2026-08-01T00:00:00+08:00", window_end="2026-08-08T00:00:00+08:00")
+
+    broken = copy.deepcopy(value)
+    broken["source"] = "youtube"
+    with pytest.raises(ValueError, match="source must be an object"):
+        validate_observation(broken)
+
+    broken = copy.deepcopy(value)
+    broken["source"] = {"provider": "attacker", "dataset": "x"}
+    with pytest.raises(ValueError, match="invalid provider"):
+        validate_observation(broken)
+
+    broken = copy.deepcopy(value)
+    broken["source"] = {"provider": "jeha_fixture", "dataset": "   "}
+    with pytest.raises(ValueError, match="dataset is required"):
+        validate_observation(broken)
+
+    broken = copy.deepcopy(value)
+    broken["source"] = {"provider": "jeha_fixture", "dataset": "m6", "extra": "unexpected"}
+    with pytest.raises(ValueError, match="exactly provider and dataset"):
+        validate_observation(broken)
 
 
 def test_derived_scores_cannot_duplicate_raw_metric_fields():
