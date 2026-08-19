@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JEHA M6 Analytics Observation",
+  "type": "object",
+  "required": ["observation_id", "video_id", "topic_id", "product", "window_start", "window_end", "source", "metrics", "derived_scores", "final_status"],
+  "properties": {
+    "observation_id": {"type": "string", "pattern": "^ANALYTICS-[A-Z]+-[0-9]{6}$"},
+    "video_id": {"type": "string", "pattern": "^VIDEO-[A-Z]+-[0-9]{6}$"},
+    "topic_id": {"type": "string", "pattern": "^TOPIC-[A-Z]+-[0-9]{6}$"},
+    "product": {"enum": ["flow_room", "moon_room", "cozy_room", "nature_room"]},
+    "window_start": {"type": "string", "minLength": 1},
+    "window_end": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "required": ["provider", "dataset"],
+      "properties": {
+        "provider": {"enum": ["jeha_fixture", "youtube_analytics"]},
+        "dataset": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["views", "estimatedMinutesWatched", "averageViewDuration", "averageViewPercentage", "likes", "subscribersGained", "subscribersLost"],
+      "properties": {
+        "views": {"type": "number", "minimum": 0},
+        "estimatedMinutesWatched": {"type": "number", "minimum": 0},
+        "averageViewDuration": {"type": "number", "minimum": 0},
+        "averageViewPercentage": {"type": "number", "minimum": 0, "maximum": 100},
+        "likes": {"type": "number", "minimum": 0},
+        "subscribersGained": {"type": "number", "minimum": 0},
+        "subscribersLost": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "derived_scores": {"type": "object"},
+    "final_status": {"const": "ANALYTICS_OBSERVATION_READY"}
+  },
+  "additionalProperties": false
+}
