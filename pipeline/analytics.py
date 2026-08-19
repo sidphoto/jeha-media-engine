@@ -36,9 +36,14 @@ def _parse_iso(value: str) -> datetime:
 
 
 def validate_observation(observation: dict) -> dict:
-    for field in ("observation_id", "video_id", "topic_id", "product", "window_start", "window_end", "source", "metrics", "derived_scores"):
+    if not isinstance(observation, dict):
+        raise ValueError("analytics observation must be an object")
+    for field in ("observation_id", "video_id", "topic_id", "product", "window_start", "window_end", "source", "metrics", "derived_scores", "final_status"):
         if field not in observation:
             raise ValueError(f"analytics observation missing {field}")
+    if observation["final_status"] != "ANALYTICS_OBSERVATION_READY":
+        raise ValueError("analytics observation has invalid final_status")
+
     product = observation["product"]
     if product not in PRODUCTS:
         raise ValueError("analytics observation has invalid product")
@@ -79,8 +84,10 @@ def validate_observation(observation: dict) -> dict:
     metrics = observation["metrics"]
     if not isinstance(metrics, dict):
         raise ValueError("analytics metrics must be an object")
+    if set(metrics) != set(METRIC_FIELDS):
+        raise ValueError("analytics metrics must contain exactly the canonical raw metric fields")
     for name in METRIC_FIELDS:
-        value = metrics.get(name)
+        value = metrics[name]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"analytics metric {name} must be numeric")
         if not math.isfinite(value):
