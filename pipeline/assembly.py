@@ -9,6 +9,7 @@ from pathlib import Path
 from jsonschema import validate
 
 from pipeline.providers import sequence_from_topic_id
+from pipeline.security import safe_run_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSEMBLY_MODES = {"dry_run", "production"}
@@ -163,6 +164,7 @@ def run_assembly_pipeline(
     assembly_mode: str = "dry_run",
 ) -> Path:
     """Consume external approval and persist the deterministic M4.1 render plan."""
+    out = safe_run_dir(ROOT, "render_runs", run_id)
     bundle = json.loads(Path(asset_bundle_path).read_text(encoding="utf-8"))
     production_spec = json.loads(Path(production_spec_path).read_text(encoding="utf-8"))
     approval = json.loads(Path(approval_path).read_text(encoding="utf-8"))
@@ -171,8 +173,6 @@ def run_assembly_pipeline(
 
     schema = json.loads((ROOT / "schemas" / "render_plan.schema.json").read_text(encoding="utf-8"))
     validate(plan, schema)
-
-    out = ROOT / "data" / "render_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "approved_asset_bundle.json", approved)
     _write(out / "render_plan.json", plan)

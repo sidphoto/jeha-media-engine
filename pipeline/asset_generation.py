@@ -15,6 +15,7 @@ from pipeline.providers import (
     FixtureVisualProvider,
     UnconfiguredLiveProvider,
 )
+from pipeline.security import safe_run_dir
 from pipeline.sfx_library import LocalSFXLibraryProvider
 from pipeline.visual_qa import validate_visual_lineage
 
@@ -196,10 +197,10 @@ def generate_asset_bundle(
 
 
 def run_asset_pipeline(production_spec_path: str | Path, run_id: str, mode: str = "fixture") -> Path:
+    out = safe_run_dir(ROOT, "asset_runs", run_id)
     source = Path(production_spec_path)
     spec = json.loads(source.read_text(encoding="utf-8"))
     bundle = generate_asset_bundle(spec, mode=mode, production_spec_ref=str(source))
-    out = ROOT / "data" / "asset_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "asset_bundle.json", bundle)
     _write(out / "assets.json", bundle["assets"])

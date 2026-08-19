@@ -6,7 +6,23 @@ import json
 import time
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    """Refuse HTTP redirects instead of silently following them.
+
+    urllib's default redirect handler resends every header on the original request -
+    including Authorization/API-key headers - to whatever host the 3xx response names.
+    A validated, allowlisted endpoint could still exfiltrate credentials via a redirect
+    to an arbitrary host, so credentialed requests must fail closed on any 3xx instead.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RuntimeError(f"Refusing to follow HTTP {code} redirect to {newurl}; credentials are not forwarded")
+
+
+_opener = build_opener(_NoRedirectHandler)
 
 
 def request_json(
@@ -30,7 +46,7 @@ def request_json(
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
-            with urlopen(req, timeout=30) as response:  # noqa: S310 - callers provide trusted API endpoints
+            with _opener.open(req, timeout=30) as response:  # noqa: S310 - callers provide trusted API endpoints
                 data = json.loads(response.read().decode())
             if cache_path is not None:
                 cache_path.write_text(json.dumps(data), encoding="utf-8")

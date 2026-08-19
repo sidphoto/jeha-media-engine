@@ -16,6 +16,7 @@ from typing import Callable
 from jsonschema import validate
 
 from pipeline.assembly import asset_bundle_fingerprint
+from pipeline.security import safe_run_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 DURATION_TOLERANCE_SECONDS = 1.0
@@ -394,6 +395,7 @@ def run_render_pipeline(
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> Path:
     """Execute production FFmpeg rendering. This path requires real approved artifacts."""
+    out = safe_run_dir(ROOT, "video_runs", run_id)
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
         raise RuntimeError("M4.4 requires ffmpeg and ffprobe on PATH")
 
@@ -406,7 +408,6 @@ def run_render_pipeline(
         raise RuntimeError("M4.4 execution only accepts production render plans; dry-run plans are planning-only")
     paths = verify_required_artifacts(audio_plan, visual_plan, bundle)
 
-    out = ROOT / "data" / "video_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     audio_path = out / "audio.m4a"
     visual_path = out / "visual.mp4"

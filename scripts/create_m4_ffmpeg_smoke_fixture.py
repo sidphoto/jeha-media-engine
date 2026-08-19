@@ -5,11 +5,17 @@ import json
 import subprocess
 from pathlib import Path
 
+from jsonschema import validate
+
 from pipeline.assembly import asset_bundle_fingerprint
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "ci_ffmpeg_smoke"
-TARGET_SECONDS = 3.0
+# Cross-stage smoke inputs must obey the real M4 schemas. The M4.1 contract expresses
+# target duration in whole minutes, so use the minimum valid production target rather
+# than bypassing boundary validation with a fractional synthetic value.
+TARGET_MINUTES = 1
+TARGET_SECONDS = float(TARGET_MINUTES * 60)
 
 
 def sha256(path: Path) -> str:
@@ -18,6 +24,11 @@ def sha256(path: Path) -> str:
 
 def write(name: str, value: object) -> None:
     (OUT / name).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def validate_schema(value: dict, schema_name: str) -> None:
+    schema = json.loads((ROOT / "schemas" / schema_name).read_text(encoding="utf-8"))
+    validate(value, schema)
 
 
 def main() -> None:
@@ -35,7 +46,7 @@ def main() -> None:
     subprocess.run(
         [
             "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=0x203040:s=1920x1080:d=1",
-            "-frames:v", "1", str(visual_path),
+            "-frames:v", "1", "-update", "1", str(visual_path),
         ],
         check=True,
     )
@@ -96,12 +107,13 @@ def main() -> None:
         "final_status": "APPROVED",
     }
     fingerprint = asset_bundle_fingerprint(bundle)
-    bundle["approval"] = {
+    approval = {
         "decision": "approved",
         "approver": "ci-synthetic-human-gate",
         "approved_at": "2026-08-18T00:00:00+00:00",
         "asset_bundle_hash": fingerprint,
     }
+    bundle["approval"] = approval
 
     render = {
         "render_plan_id": "RENDER-FLOW-999998",
@@ -111,7 +123,15 @@ def main() -> None:
         "assembly_mode": "production",
         "source_asset_mode": "live",
         "source_bundle_hash": fingerprint,
-        "target": {"duration_minutes": TARGET_SECONDS / 60.0, "aspect_ratio": "16:9", "status": "READY_FOR_RENDER"},
+        "approval": approval,
+        "lineage": {
+            "production_spec_ref": "ci-smoke-spec.json",
+            "asset_ids": [music_id, visual_id],
+            "music_id": music_id,
+            "visual_id": visual_id,
+            "sfx_ids": [],
+        },
+        "target": {"duration_minutes": TARGET_MINUTES, "aspect_ratio": "16:9", "status": "READY_FOR_RENDER"},
         "final_status": "READY_FOR_RENDER",
     }
     audio = {
@@ -123,8 +143,11 @@ def main() -> None:
         "source_bundle_hash": fingerprint,
         "target_duration_seconds": TARGET_SECONDS,
         "music": {
+            "strategy": "trim_only",
             "source_asset_id": music_id,
             "source_content_hash": bundle["assets"][0]["content_hash"],
+            "source_duration_seconds": TARGET_SECONDS,
+            "crossfade_seconds": 0.0,
             "segments": [
                 {
                     "sequence": 1,
@@ -136,9 +159,20 @@ def main() -> None:
                     "crossfade_in_seconds": 0.0,
                 }
             ],
+            "planned_coverage_seconds": TARGET_SECONDS,
+            "output_trim_seconds": 0.0,
         },
         "sfx_tracks": [],
-        "mix": {"integrated_loudness_target_lufs": -16.0, "true_peak_ceiling_dbtp": -1.5, "sfx_gain_db": None},
+        "mix": {
+            "integrated_loudness_target_lufs": -16.0,
+            "true_peak_ceiling_dbtp": -1.5,
+            "sfx_gain_db": None,
+            "target_basis": "JEHA internal production target",
+        },
+        "provenance": {
+            "claim": "CI synthetic source hashes verified against the approved M3 bundle",
+            "audio_asset_hashes": {music_id: bundle["assets"][0]["content_hash"]},
+        },
         "final_status": "AUDIO_PLAN_READY",
     }
     visual = {
@@ -151,12 +185,18 @@ def main() -> None:
         "source_visual": {
             "asset_id": visual_id,
             "content_hash": bundle["assets"][1]["content_hash"],
+            "width": 1920,
+            "height": 1080,
+            "aspect_ratio": "16:9",
             "style_preset": "jeha_cinematic_dreamy_realism_v1",
         },
         "execution_profile": {
             "width": 1920,
             "height": 1080,
             "fps": 30,
+            "motion_class": "low_stimulation_ken_burns",
+            "phase_seconds": TARGET_SECONDS,
+            "crossfade_seconds": 1.0,
             "max_scale": 1.035,
             "max_pan_x_fraction": 0.014,
             "max_pan_y_fraction": 0.008,
@@ -179,8 +219,16 @@ def main() -> None:
                 },
             }
         ],
+        "planned_coverage_seconds": TARGET_SECONDS,
+        "output_trim_seconds": 0.0,
         "final_status": "VISUAL_PLAN_READY",
     }
+
+    # Assert the smoke fixture itself obeys the same cross-stage contracts enforced by
+    # production entrypoints. This prevents CI from normalizing invalid synthetic shapes.
+    validate_schema(render, "render_plan.schema.json")
+    validate_schema(audio, "audio_plan.schema.json")
+    validate_schema(visual, "visual_motion_plan.schema.json")
 
     write("approved_bundle.json", bundle)
     write("render_plan.json", render)

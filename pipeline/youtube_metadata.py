@@ -6,6 +6,8 @@ from pathlib import Path
 
 from jsonschema import validate
 
+from pipeline.security import safe_run_dir
+
 ROOT = Path(__file__).resolve().parents[1]
 TITLE_MAX_CHARS = 100
 DESCRIPTION_MAX_BYTES = 5000
@@ -156,6 +158,7 @@ def run_metadata_pipeline(
     default_language: str = "en",
     category_id: str = "10",
 ) -> Path:
+    out = safe_run_dir(ROOT, "metadata_runs", run_id)
     publish_plan = json.loads(Path(publish_plan_path).read_text(encoding="utf-8"))
     production_spec = json.loads(Path(production_spec_path).read_text(encoding="utf-8"))
     package = build_metadata_package(
@@ -167,7 +170,6 @@ def run_metadata_pipeline(
     schema = json.loads((ROOT / "schemas" / "youtube_metadata.schema.json").read_text(encoding="utf-8"))
     validate(package, schema)
 
-    out = ROOT / "data" / "metadata_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "youtube_metadata.json", package)
     _write(

@@ -17,9 +17,12 @@ from urllib.parse import urlencode, urlparse
 
 from jsonschema import validate
 
+from pipeline.security import load_json_validated, safe_run_dir, validate_https_host
+
 ROOT = Path(__file__).resolve().parents[1]
 UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/youtube/v3/videos"
 DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024
+YOUTUBE_UPLOAD_HOSTS = frozenset({"www.googleapis.com"})
 
 
 def _sha256_file(path: Path) -> str:
@@ -95,13 +98,16 @@ class YouTubeResumableTransport:
         self.chunk_size = chunk_size
 
     def _connection(self, url: str) -> tuple[http.client.HTTPSConnection, str]:
+        validate_https_host(
+            url,
+            exact_hosts=YOUTUBE_UPLOAD_HOSTS,
+            label="YouTube resumable upload",
+        )
         parsed = urlparse(url)
-        if parsed.scheme != "https" or not parsed.hostname:
-            raise RuntimeError("YouTube upload URL must be HTTPS")
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
-        return http.client.HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=180), target
+        return http.client.HTTPSConnection(parsed.hostname, 443, timeout=180), target
 
     def _put_chunk(self, location: str, access_token: str, chunk: bytes, start: int, total: int) -> tuple[int, dict[str, str], bytes]:
         end = start + len(chunk) - 1
@@ -145,6 +151,12 @@ class YouTubeResumableTransport:
         conn.close()
         if status not in {200, 201} or not location:
             raise RuntimeError(f"YouTube resumable session initiation failed: HTTP {status}")
+
+        validate_https_host(
+            location,
+            exact_hosts=YOUTUBE_UPLOAD_HOSTS,
+            label="YouTube resumable session",
+        )
 
         offset = 0
         with video_path.open("rb") as handle:
@@ -239,13 +251,21 @@ def run_upload_pipeline(
     *,
     mode: str = "fixture",
 ) -> Path:
-    publish_plan = json.loads(Path(publish_plan_path).read_text(encoding="utf-8"))
-    metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
+    out = safe_run_dir(ROOT, "upload_runs", run_id)
+    publish_plan = load_json_validated(
+        publish_plan_path,
+        ROOT / "schemas" / "publish_plan.schema.json",
+        label="M5.3 publish plan",
+    )
+    metadata = load_json_validated(
+        metadata_path,
+        ROOT / "schemas" / "youtube_metadata.schema.json",
+        label="M5.3 YouTube metadata",
+    )
     record = run_private_upload(publish_plan, metadata, mode=mode)
     schema = json.loads((ROOT / "schemas" / "youtube_upload_record.schema.json").read_text(encoding="utf-8"))
     validate(record, schema)
 
-    out = ROOT / "data" / "upload_runs" / run_id
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "upload_record.json", record)
     _write(
